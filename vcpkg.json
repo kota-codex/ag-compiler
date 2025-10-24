@@ -1,0 +1,13 @@
+{
+  "name": "argentum",
+  "version": "0.0.30",
+  "dependencies": [
+    "curl",
+    "libzip",
+    {
+      "name": "llvm",
+      "default-features": false,
+      "features": [ "target-webassembly", "target-x86", "target-aarch64" ]
+    }
+  ]
+}
