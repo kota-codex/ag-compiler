@@ -113,10 +113,6 @@ int main(int argc, char* argv[]) {
             exit(1);
         }
     };
-    if (depot.repos.empty()) {
-        llvm::errs() << "at least one -src parameter expected\n";
-        exit(1);
-    }
     check_str(start_module_name, "start module");
     check_str(out_file_name, "output file");
     ast::initialize();
