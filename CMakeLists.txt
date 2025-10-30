@@ -6,20 +6,18 @@ if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
   MESSAGE(FATAL_ERROR "Toolchain file not set, try using: cmake --preset default")
 endif()
 
-add_subdirectory(external/ag-ffi-header)
+add_subdirectory(ag-ffi-header)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 add_definitions(-D_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS)
 
-find_package(CURL REQUIRED)
+find_package(CURL CONFIG REQUIRED)
 find_package(libzip CONFIG REQUIRED)
 find_package(LLVM CONFIG REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
 include(HandleLLVMOptions)
-add_definitions(${LLVM_DEFINITIONS})
-
 add_definitions(${LLVM_DEFINITIONS})
 llvm_map_components_to_libnames(llvm_libs ${LLVM_TARGETS_TO_BUILD})
 
@@ -65,23 +63,17 @@ add_executable(agc
     src/package-manager.h
     src/package-manager.cpp
 )
-target_compile_definitions(agc PRIVATE AG_STANDALONE_COMPILER_MODE)
 target_include_directories(agc PRIVATE ${LLVM_INCLUDE_DIRS})
 target_include_directories(agc  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 target_link_libraries(agc PUBLIC ag_ffi_header)
 
 target_link_libraries(agc PRIVATE ${llvm_libs})
-#target_link_libraries(agc PRIVATE ag_runtime) #TODO:remove after reg-runtime redesign
-target_link_libraries(agc PRIVATE ${llvm_libs})
 target_link_libraries(agc PRIVATE libzip::zip)
+target_link_libraries(agc PRIVATE CURL::libcurl)
+target_link_libraries(agc PRIVATE ag_ffi_header)
 
-if(TARGET CURL::libcurl_shared)
-    target_link_libraries(agc PRIVATE CURL::libcurl_shared)
-else()
-    target_link_libraries(agc PRIVATE CURL::libcurl)
-endif()
-
-if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    target_compile_options(agc PRIVATE "/EHsc")
-endif()
+set(DST "$<IF:$<BOOL:${AG_TRIPLE}>,${CMAKE_CURRENT_SOURCE_DIR}/out/${AG_TRIPLE},${CMAKE_CURRENT_SOURCE_DIR}/../out>")
+set_target_properties(agc PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${DST}"
+)
