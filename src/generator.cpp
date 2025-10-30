@@ -3584,68 +3584,7 @@ llvm::orc::ThreadSafeModule generate_code(ltm::pin<ast::Ast> ast, bool add_debug
 	return gen.build(entry_point_name);
 }
 
-#ifdef AG_STANDALONE_COMPILER_MODE
-// `ag_disp_sys_String` defined by linker
-#else
-ag_dispatcher_t ag_disp_sys_String;
-#endif
-
-int64_t execute(llvm::orc::ThreadSafeModule& module, ast::Ast& ast, bool dump_ir) {
-#ifdef AG_STANDALONE_COMPILER_MODE
-	return -1;
-#else
-	if (dump_ir) {
-		module.withModuleDo([](llvm::Module& m) {
-			m.print(llvm::outs(), nullptr);
-		});
-	}
-	llvm::ExitOnError check;
-	llvm::InitializeNativeTarget();
-	llvm::InitializeNativeTargetAsmPrinter();
-	auto jit = check(llvm::orc::LLJITBuilder().create());
-	auto& es = jit->getExecutionSession();
-	auto* lib = es.getJITDylibByName("main");
-	llvm::orc::SymbolMap runtime_exports;
-	for (auto& i : ast.platform_exports) {
-		runtime_exports.insert({
-			es.intern(i.first),
-			{
-				llvm::orc::ExecutorAddr::fromPtr(i.second),
-				llvm::JITSymbolFlags::Callable
-			} });
-	}
-	check(lib->define(llvm::orc::absoluteSymbols(move(runtime_exports))));
-	check(jit->addIRModule(std::move(module)));
-	auto f_str_disp = check(jit->lookup("ag_disp_sys_String"));
-	ag_disp_sys_String = f_str_disp.toPtr<void**(uint64_t)>();
-	auto f_main = check(jit->lookup("main"));
-	auto main_addr = f_main.toPtr<void()>();
-	for (auto& m : ast.modules) {
-		for (auto& test : m.second->tests) {
-			std::cout << "Test:" << m.first << "_" << test.first << "\n";
-			auto test_fn = check(jit->lookup(ast::format_str("ag_test_", m.first, "_", test.first)));
-			auto addr = test_fn.toPtr<void()>();
-			addr();
-			assert(ag_leak_detector_ok());
-			std::cout << " passed" << std::endl;
-		}
-	}
-	main_addr();
-	assert(ag_leak_detector_ok());
-	ag_disp_sys_String = nullptr;
-	return 0;
-#endif
-}
-
 static bool llvm_inited = false;
 static const char* arg = "";
 static const char** argv = &arg;
 static int argc = 0;
-
-int64_t generate_and_execute(ltm::pin<ast::Ast> ast, bool add_debug_info, bool dump_ir) {
-	if (!llvm_inited)
-		llvm::InitLLVM X(argc, argv);
-	llvm_inited = true;
-	auto module = generate_code(ast, add_debug_info, "main");
-	return execute(module, *ast, dump_ir);
-}
