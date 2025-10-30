@@ -193,7 +193,8 @@ void Depot::add(string address) {
         if (std::regex_match(
             name,
             match,
-            entry.is_regular_file() ? file_re : dir_re)) {
+            entry.is_regular_file() ? file_re : dir_re))
+        {
             std::string name = match[1];
             auto version = atoll(match[2].str().c_str());
             Repo::Module& m = r.modules[name];
@@ -211,7 +212,7 @@ optional<string> Depot::import_module(Repo::Module& m, stringstream& out_message
     if (!m.is_directory) {
         auto r = read_file(m.path);
         if (!r)
-            out_messages << "Can't read :" << m.path << std::endl;
+            out_messages << "Can't read :" << m.path << "\n";
         return r;
     }
     unordered_map<string, fs::path> content;
@@ -219,7 +220,7 @@ optional<string> Depot::import_module(Repo::Module& m, stringstream& out_message
         string dir_to_go;
         bool has_dirs = false;
         for (auto& entry : fs::directory_iterator(path)) {
-            if (*entry.path().filename().generic_string().c_str() != '-')
+            if (*entry.path().filename().generic_string().c_str() == '-')
                 continue;
             if (entry.is_regular_file()) {
                 content[entry.path().filename().generic_string()] = entry.path();
