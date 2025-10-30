@@ -9,5 +9,8 @@
       "default-features": false,
       "features": [ "target-webassembly", "target-x86", "target-aarch64" ]
     }
+  ],
+  "overrides":[
+    {"name": "llvm", "version": "17.0.2#5"}
   ]
 }
