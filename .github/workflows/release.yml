@@ -1,0 +1,101 @@
+on:
+  push:
+    tags:
+      - 'v.*'
+permissions:
+  contents: write
+jobs:
+  build-runtime:
+    uses: kota-codex/ag-modules-ci/.github/workflows/build.yml@main
+    with:
+      repository: kota-codex/ag-runtime
+      ref: main
+    secrets: inherit
+  build-comp-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup dependencies
+        shell: pwsh
+        run: |
+          choco install -y git cmake ninja visualstudio2022buildtools windows-sdk-10.0
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64_arm64
+      - name: Build Windows (x64 + arm64)
+        run: build-win.bat
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-comp-out
+          path: out
+  build-comp-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git cmake ninja-build g++-aarch64-linux-gnu libc6-dev-arm64-cross
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: '62324000504cdd27282f8275c99135cfb2bd1dc0'
+          runVcpkgInstall: true
+      - name: Build Linux
+        run: build-linux.sh
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-comp-out
+          path: out
+  build-comp-apple:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          brew install git cmake ninja
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: '62324000504cdd27282f8275c99135cfb2bd1dc0'
+          runVcpkgInstall: true
+      - name: Build macOS
+        run: build-apple.sh
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: osx-comp-out
+          path: out
+  package:
+    runs-on: ubuntu-latest
+    needs: [build-comp-windows, build-comp-linux, build-comp-apple, build-runtime]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: in
+      - name: Create per-platform zip archives
+        run: |
+          mv in/ag-module in/runtime
+          TAG="${GITHUB_REF_NAME#v.}"   # Strip 'v.' prefix (e.g., "2.33")
+          TAG=$(echo "$TAG" | cut -d. -f1)  # Extract major version (e.g., "2")
+          for PLATFORM in osx linux windows; do
+            for ARCH in arm64 x64; do
+              ZIPNAME="argentum-${ARCH}-${PLATFORM}-${TAG}.zip"
+              (
+                cd "in/${PLATFORM}-comp-out/${ARCH}-${PLATFORM}" &&
+                zip -r "../../../$ZIPNAME" .
+              )
+              (
+                cd in &&
+                zip -ur "../$ZIPNAME" runtime
+              )
+              done
+          done
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "*.zip"
+          generate_release_notes: true
