@@ -141,10 +141,10 @@ void register_runtime_content(struct ast::Ast& ast) {
 			make_ptr_result(new ast::FreezeOp, key_cls));
 		ast.mk_method(mut::ANY, map_cls, "size", new ast::ConstInt64, {});
 		ast.mk_method(mut::ANY, map_cls, "capacity", new ast::ConstInt64, {});
-		ast.mk_method(mut::ANY, map_cls, "clear", new ast::ConstVoid, {});
-		ast.mk_method(mut::ANY, map_cls, "delete", opt_ref_to_val_res, { ast.get_shared(key_cls) });
+		ast.mk_method(mut::MUTATING, map_cls, "clear", new ast::ConstVoid, {});
+		ast.mk_method(mut::MUTATING, map_cls, "delete", opt_ref_to_val_res, { ast.get_shared(key_cls) });
 		ast.mk_method(mut::ANY, map_cls, "getAt", opt_ref_to_val_res, { ast.get_shared(key_cls) });
-		ast.mk_method(mut::ANY, map_cls, "setAt", opt_ref_to_val_res, { ast.get_shared(key_cls), ast.get_own(val_cls) });
+		ast.mk_method(mut::MUTATING, map_cls, "setAt", opt_ref_to_val_res, { ast.get_shared(key_cls), ast.get_own(val_cls) });
 		ast.mk_method(mut::ANY, map_cls, "keyAt", opt_shared_to_key_res, { ast.tp_int64() });
 		ast.mk_method(mut::ANY, map_cls, "valAt", opt_ref_to_val_res, { ast.tp_int64() });
 	}
@@ -161,10 +161,10 @@ void register_runtime_content(struct ast::Ast& ast) {
 			make_ptr_result(new ast::FreezeOp, key_cls));
 		ast.mk_method(mut::ANY, map_cls, "size", new ast::ConstInt64, {});
 		ast.mk_method(mut::ANY, map_cls, "capacity", new ast::ConstInt64, {});
-		ast.mk_method(mut::ANY, map_cls, "clear", new ast::ConstVoid, {});
-		ast.mk_method(mut::ANY, map_cls, "delete", opt_shared_to_val_res, { ast.get_shared(key_cls) });
+		ast.mk_method(mut::MUTATING, map_cls, "clear", new ast::ConstVoid, {});
+		ast.mk_method(mut::MUTATING, map_cls, "delete", opt_shared_to_val_res, { ast.get_shared(key_cls) });
 		ast.mk_method(mut::ANY, map_cls, "getAt", opt_shared_to_val_res, { ast.get_shared(key_cls) });
-		ast.mk_method(mut::ANY, map_cls, "setAt", opt_shared_to_val_res, { ast.get_shared(key_cls), ast.get_shared(val_cls) });
+		ast.mk_method(mut::MUTATING, map_cls, "setAt", opt_shared_to_val_res, { ast.get_shared(key_cls), ast.get_shared(val_cls) });
 		ast.mk_method(mut::ANY, map_cls, "keyAt", opt_shared_to_key_res, { ast.tp_int64() });
 		ast.mk_method(mut::ANY, map_cls, "valAt", opt_shared_to_val_res, { ast.tp_int64() });
 	}
@@ -180,14 +180,14 @@ void register_runtime_content(struct ast::Ast& ast) {
 			make_ptr_result(new ast::FreezeOp, key_cls));
 		ast.mk_method(mut::ANY, map_cls, "size", new ast::ConstInt64, {});
 		ast.mk_method(mut::ANY, map_cls, "capacity", new ast::ConstInt64, {});
-		ast.mk_method(mut::ANY, map_cls, "clear", new ast::ConstVoid, {});
-		ast.mk_method(mut::ANY, map_cls, "delete", weak_to_val_res, { ast.get_shared(key_cls) });
+		ast.mk_method(mut::MUTATING, map_cls, "clear", new ast::ConstVoid, {});
+		ast.mk_method(mut::MUTATING, map_cls, "delete", weak_to_val_res, { ast.get_shared(key_cls) });
 		ast.mk_method(mut::ANY, map_cls, "getAt", weak_to_val_res, { ast.get_shared(key_cls) });
-		ast.mk_method(mut::ANY, map_cls, "setAt", weak_to_val_res, { ast.get_shared(key_cls), ast.get_weak(val_cls) });
+		ast.mk_method(mut::MUTATING, map_cls, "setAt", weak_to_val_res, { ast.get_shared(key_cls), ast.get_weak(val_cls) });
 		ast.mk_method(mut::ANY, map_cls, "keyAt", opt_shared_to_key_res, { ast.tp_int64() });
 		ast.mk_method(mut::ANY, map_cls, "valAt", weak_to_val_res, { ast.tp_int64() });
 	}
-	ast.mk_fn("getParent", opt_ref_to_object, { ast.get_conform_ref(ast.object) });
+	ast.mk_fn("getParent", opt_ref_to_object, { ast.get_ref(ast.object) });
 	ast.mk_fn("log", new ast::ConstVoid, { ast.get_conform_ref(ast.string_cls) });
 	ast.mk_fn("hash", new ast::ConstInt64, { ast.get_shared(ast.object) });
 	ast.mk_fn("nowMs", new ast::ConstInt64, {});
