@@ -1,0 +1,801 @@
+using sys{
+    Object,
+    Cursor,
+    StrBuilder,
+    par = getParent
+}
+
+fn assert(v bool);
+
+test ints() {
+    assert(7 == (2 ^ 2 * 3 + 1) << (2-1) | (2+2) | (3 & (2>>1)))
+}
+
+test doubles() {
+    assert(3 == int(3.14 - 0.2e-4 * 5.0))
+}
+
+test block() {
+    assert(3 == {1+1}+1) 
+}
+
+test lambdaWithParams() {
+    assert(40 == `a{1+a}(3)*10)
+}
+
+test passingLambdaToLambda() {
+    assert(0 ==
+      `a `b `xfn {
+            xfn`t {a + b + t}
+      } (2, 4) `vfn {
+            vfn(3) * vfn(5)
+      })
+}
+
+test sequence() {
+    assert(44 == {1; 3.14; 44})
+}
+
+test localAssignment() {
+    assert(10 == {
+        a = 2;
+        a := a + 3;
+        a * 2
+    })
+}
+
+test makeAndConsumeOptionals() {
+    assert(2 == `opt { opt : 2 } (false ? 44))
+}
+
+test maybeChain() {
+    assert(3 == {
+        a = +3.3;  // a: local of type optional(double), having value just(3.3)
+        a ? int(_) : 0  // convert optional(double) to optional(int) and extract replacing `none` with 0
+    })
+}
+
+test intComparisons() {
+    a = 2;
+    assert(a < 10);
+    assert(a > -1);
+    assert(a != 0)
+}
+
+test loops() {
+    a = 0;
+    r = 1;
+    assert(39916800 ==
+        loop {
+            a := a + 1;
+            r  := r * a;
+            a > 10 ? r
+        }
+    )
+}
+
+class Point {
+    x = 0;
+    y = 2;
+}
+
+test classes() {
+    p = Point;
+    p.x := 1;
+    assert(3 == p.y + p.x)
+}
+
+test classInstanceCopy() {
+    p=Point;
+    p.x := 1;
+    pb = @p;
+    pb.x := 3;
+    assert(4 == p.x + pb.x)
+}
+
+class Point {
+    m() int { x+y }
+}
+class P3 {
+    +Point{
+        m() int { x+y+z }
+    }
+    z=3;
+}
+
+test classMethods() {
+    p=P3;
+    p.x := 10;
+    p.z := 20;
+    assert(32 == p.m())
+}
+
+interface Movable {
+    moveTo(x int, y int);
+}
+interface RelMovable {
+    moveBy(dx int, dy int);
+}
+class P3 {
+    +RelMovable {
+        moveBy(dx int, dy int) {
+            x := x + dx;
+            y := y + dy
+        }
+    }
+}
+
+test interfaces() {
+    p=P3;         // 1, 2, 3
+    p.x := 10;    // 10, 2, 3
+    p.z := 20;    // 10, 2, 20
+    p.moveBy(2, 3); // 12, 5, 20
+    assert(37 == p.m())
+}
+
+interface Sizeable {
+    resize(width int, height int);
+}
+
+class Widget {
+    +Point;
+    +Movable {
+        moveTo(x int, y int) {
+            this.x := x;
+            this.y := y;
+        }
+    }
+    +Sizeable {
+        resize(width int, height int) {
+            size.x := width;
+            size.y := height;
+
+        }
+    }
+    size = Point;
+    color = 24;
+}
+
+test twoInterfaces() {
+    p = Widget;
+    p.moveTo(1,2);
+    p.resize(100,200);
+    assert(201 == p.x + p.size.y)
+}
+
+test promisedCast() { // it should compile
+    w = Widget;
+    p = w~Movable; // p is of type Movable containing a Widget instance
+    p.moveTo(1, 2);
+    assert(3 == w.x + w.y);
+}
+
+test classCast() {
+    p = Widget~Point;  // `p` is a `Point` holder initialized with a `Widget` instance
+    assert((p~Widget?_.color : 0) == 24)     // cast `p` to `Widget` and return its `color` field on success
+}
+
+test interfaceCast() { // TODO interface dispatch with collisions
+    p = Point;
+    w = Widget~Point;
+    assert(!(p~Sizeable)); // should not cast
+}
+
+test weaks() {
+    p = Point;
+    w = &p;
+    p.x := 22;
+    r = w?_.x : 100;
+    p := Point;
+    w ? r := r + _.x;
+    assert(22 == r)
+}
+
+class Node {
+    parent = &Node;  // Weak(Node) = null
+    left = ?Node;    // Optional(own(Node)) = null
+    right = ?Node;
+
+    scan(expectedParent &Node) int {
+        lcount = left?_.scan(&this) : 0;
+        rcount = right?_.scan(&this) : 0;
+        this.parent == expectedParent
+            ? lcount + rcount + 1
+            : -100
+    }
+}
+
+test topoCopy() {
+    root = Node;
+    root.left := Node;
+    root.right := Node;
+    root.left?_.parent := &root;
+    root.right?_.parent := &root;
+
+    oldSize = root.scan(&Node);
+
+    root.left := @root;
+    root.left?_.parent := &root;
+
+    assert(35 == oldSize * 10 + root.scan(&Node))
+}
+
+test logicalOr() {
+    a = 3;
+    assert(a > 2 || a < 4)
+}
+
+test logicalAnd() {
+    a = 3;
+    assert(a > 2 && a < 4)
+}
+
+class sys_Blob {
+    getAt(i int) int { get64At(i) }
+    setAt(i int, v int) { set64At(i, v) }
+}
+
+test blobsAndIndexes() {
+    b = sys_Blob;
+    b.insert(0, 3);
+    b[1] := 42;
+    c = @b;
+    assert(42 == c[1])
+}
+
+class DelegateClass{
+    x = 11;
+    m(i int) int { x + i }
+}
+fn f(handler &(int)int) int {
+    handler(42) : 0
+}
+
+test delegates() {
+    c = DelegateClass;
+    assert(53 == f(c.m)); // 42+11=53
+    assert(31 == f(c.&diff(i int) int { i - x }))
+}
+
+class ArrayItem {
+    x = 1;
+    y = 0;
+}
+
+test arrays() {
+    a = sys_Array(ArrayItem);
+    a.insert(0, 10);
+    a[0] := ArrayItem;
+    a[1] := ArrayItem;
+    a[1] ? {
+        _.x := 42;
+        _.y := 33;
+    };
+    c = @a;
+    c.delete(0, 1);
+    assert(42 == (c[0] ? _.x : -1))
+}
+
+test weakArrays() {
+    n = ArrayItem;
+    a = sys_WeakArray(ArrayItem);
+    a.insert(0, 10);
+    a[0] := &n;
+    a[1] := &n;
+    c = @a;
+    c.delete(0, 1);
+    assert(c[0] && _ == n)
+}
+
+class CopyDetector{
+    x = 0;
+}
+fn afterCopyCopyDetector(c CopyDetector) { c.x := -1 }
+
+fn mkCopyDetector() @CopyDetector {
+    r = CopyDetector;
+    r.x := 5;
+    r
+}
+
+test retOwnPtr() {
+    r = mkCopyDetector();
+    assert(r.x == 5);
+    r := CopyDetector.{ _.x := 10 };
+    assert(r.x == 10);
+}
+
+class InitializerNode {
+    x = 1;
+    y = 0;
+    flags = 0;
+    initPos(x int, y int) this {  // Functions marked with this when called on @pointer return @pointer, and with correct derived type!
+        this.x := x;
+        this.y := y;
+    }
+    transpose() this {
+        t = this.x;
+        this.x := this.y;
+        this.y := t;
+    }
+    addFlags(f int) this {
+        this.flags := this.flags | f;
+    }
+    removeFlags(f int) this {
+        this.flags := this.flags & ~f;
+    }
+}
+class InitializerBar {
+    n = InitializerNode  // 1 0 0    // they can be used as rich combinable, named, virtual constructors
+        .initPos(1, 4)   // 1 4 0
+        .transpose()     // 4 1 0
+        .addFlags(3);    // 4 1 3
+}
+
+test initializerMethods() {
+    b = InitializerBar;
+    b.n.removeFlags(2);      // 4 1 1    // they can be used as normal methods too
+    assert(5 == b.n.x + b.n.flags)         // 5
+}
+
+class sys_String{
+    *length() int {
+        s = Cursor.set(this);
+        r = 0;
+        loop {
+            c = s.getCh();
+            c != 0s ? r += 1;
+            c == 0s ? r
+        }
+    }
+}
+class OString {
+    +sys_Blob;
+    pos = 0;
+    put(codePoint short) this {
+        size = capacity();
+        growStep = 100;
+        pos + 5 >= size ?
+            insert(size, growStep);
+        pos := putChAt(pos, codePoint)
+    }
+    append(s str) this {
+        cur = Cursor.set(s);
+        loop{
+            c = cur.getCh();
+            c != 0s ? put(c);
+            c == 0s
+        }
+    }
+    toStr() str {
+        mkStr(0, pos).{
+            pos := 0;
+        }
+    }
+}
+
+test stringOperations() {
+    a = OString.put('<').append("Hello there").put('>').toStr();
+    assert(a == "<Hello there>")
+}
+
+test literalStrings() {
+    a = Cursor.set("Hi");
+    a.getCh(); // a="i"
+    b = @a;
+    a.getCh(); // a=""   b"i"
+    assert(b.getCh() == 'i');
+    assert(a.getCh() == 0s) // at 'a' end
+}
+
+test stringEscapes() {
+    s = Cursor.set(utf32_(10, 9, 13, '"', 0x5c, 0x1090e, 0x65, '!'));
+    assert(0x0as == s.getCh());
+    assert(9s == s.getCh());
+    assert(0x0ds == s.getCh());
+    assert('"' == s.getCh());
+    assert(0x5cs == s.getCh());
+    assert(0x1090es == s.getCh());
+    assert(0x65s == s.getCh());
+    assert('!' == s.getCh());
+    assert(0s == s.getCh());
+}
+
+class Cl{
+    x = 0xc;
+    getAt(i int) int { x }
+    setAt(i int, v int) { x := v }
+    inc() {
+        x += 1
+    }
+}
+
+test setOps() {
+    a = 1;    // a=1   x=0xc
+    a *= 10;  // a=10
+    a += 4;   // a=14
+    c = Cl;
+    c.x |= 3;  //     x=0xf(15)
+    c[4] /= 3; //     x = 5
+    c.inc();   //     x=6
+    assert(20 == c.x + a)
+}
+
+class ParentCl{
+    x = 0;
+    inner = ?ParentCl;
+    new(x int) this { this.x := x }
+}
+
+test getParent() {
+    a = ParentCl.new(11);
+    a.inner := ParentCl.new(22);
+    a.inner?_.inner := ParentCl.new(33);
+    assert(!sys_getParent(a));
+    assert(a.inner && sys_getParent(_) && _~ParentCl && _.x == 11);
+    assert(a.inner && _.inner && sys_getParent(_) && _~ParentCl && _.x == 22);
+}
+
+test getParentArray() {
+    a = sys_Array(Object);
+    a.insert(0, 10);
+    a[0] := Object;
+    assert(a[0] && par(_) && _==a);
+    v = a[0];
+    a.delete(0, 1);
+    assert(v && !par(_));
+    a[0] := Object;
+    assert(a[0] && par(_) && _==a);
+    v := a[0];
+    a.setOptAt(0, ?Object);
+    assert(v && !par(_));
+    assert(!par(a))
+}
+
+class SpliceCls{ inner = ?SpliceCls; }
+
+test splice() {
+    a = SpliceCls;
+    a.inner := SpliceCls;
+    temp = a.inner;
+    a.inner := ?SpliceCls;
+    assert(temp && !sys_getParent(_));
+    a.inner @= temp;
+    assert(temp == a.inner)
+}
+
+class SharPoint {
+    x = 0;
+    y = 0;
+    z = "";
+    at(x int, y int) this {
+       this.x := x;
+       this.y := y
+    }
+    *sum() int { x+y }
+}
+
+test shared() {
+      p = *SharPoint.at(1, 2);
+      p2 = p;
+      assert(p2.sum() == 3);
+      assert(p == p2)
+}
+
+const xDefPoint = *Point;
+const xCount = 4;
+const xHello = "Hello world";
+
+test consts() {
+    p = @xDefPoint;
+    assert(xCount == 4);
+    assert(xHello == "Hello world");
+    assert(xDefPoint.x == 0);
+}
+
+test multiline() {
+    assert("....\
+        Multiline
+        string
+    " == "    Multiline{utf32_(0x10s)}    string{utf32_(0x10s)}");
+}
+
+class StrBuilder{
+    pos = 0;
+    put(codePoint short) this {
+        size = capacity();
+        growStep = 100;
+        pos + 5 >= size ?
+            insert(size, growStep);
+        pos := putChAt(pos, codePoint)
+    }
+    putStr(s str) this {
+        s = Cursor.set(s);
+        loop !{
+            c = s.getCh();
+            c != 0s ? put(c)
+        }
+    }
+    putInt(v int) this {
+        put(short(v % 10) + '0')
+    }
+    toStr() str {
+        mkStr(0, pos).{ pos := 0 }
+    }
+}
+
+fn stringInterpolation() {
+    assert("Hi {2*2}!"=="Hi 4!");
+    assert("${}\
+        Name=${
+            1 < 2
+                ? "asdf"
+                : "zxcv"}
+        Age=${2 * 2}
+    " == "
+        Name=asdf
+        Age=4
+    ");
+}
+
+class Pair(K, V) {
+    key = ?*K;
+    val = ?V;
+    set(k *K, v()@V) this {
+      key := k;
+      val := v();
+    }
+}
+
+test generics() {
+    p = Pair(sys_String, sys_Blob).set("Hello", sys_Blob);
+    assert(p.key && _ == "Hello");
+}
+
+class sys_WeakArray{
+    append(item T) T {
+        insert(capacity(), 1);
+        this[capacity() - 1] := &item;
+        item
+    }
+}
+
+test reopenGenerics() {
+    a = sys_WeakArray(sys_Object);
+    x = sys_Object;
+    a.append(x);
+    assert(a[0] && x == _);
+}
+
+class Map(K, V) {
+    +sys_Array(Pair(K, V));
+}
+class Dict(X) {
+    +Map(sys_String, X);
+}
+
+test genericFromGeneric() {
+    d = Dict(sys_Blob);
+    assert((d[0] && _.key : "") == "") // it should compile
+}
+
+fn myFn(s sys_SharedArray(sys_String)) {
+    s[0] ? sys_log(_)
+}
+
+test genericInstAsType() { // it should compile
+    myFn(sys_SharedArray(sys_String).{
+        _.insert(0, 1);
+        _[0] := "Aloha"
+    })
+}
+
+fn fnForReturnFromFnTest() int {
+    i = 2;
+    loop {
+        i -= 1;
+        i == 0 ? ^fnForReturnFromFnTest=42;
+        i < 0
+    };
+    11
+}
+
+test returnFromFnTest() {
+    assert(42 == fnForReturnFromFnTest())
+}
+
+test breakTest() {
+    i = 2;
+    r = loop {
+        i -= 1;
+        i == 0 ? ^r = 42;
+    };
+    assert(42 == r)
+}
+
+fn badFn(a str, b str) {
+    assert(false);  // shouldn't be called
+}
+
+test breakSkipsCallWithPartialParamsFn() {
+    {=block
+        badFn("asdf", ?"" : ^block);
+    }
+}
+
+test breakFromLocalInitializerTest() {
+    {=block
+        a = "asdf";
+        b = ?"" : ^block;
+        c = badFn("","");
+        a := "";
+    }
+}
+
+fn breakFromInnerLambdaFn(l()) str {
+    l();
+    "Normal"
+}
+
+test breakFromInnerLambdaTest() {
+    x = breakFromInnerLambdaFn {
+        ^x = "From break";
+    };
+    assert(x == "From break")
+}
+
+fn boolLambdaFn(l()bool) bool {
+    l()
+}
+
+test boolLambdaTest() {
+    assert(!boolLambdaFn{false}) // boolLambdaFn() returns !false
+}
+
+// fn returnFromLambdaParam() {
+//     execute(R"(
+//         using sys{ Array, String }
+//         class Array {
+//             append(t()@T) {
+//                 c = capacity();
+//                 insert(c, 1);
+//                 this[c] := t();
+//             }
+//         }
+//         class String {
+//             getOne() ?@String { getCh() != 0 ? "A" }
+//             split() @Array(String) {
+//                 res = Array(String);
+//                 loop {
+//                     res.append(getOne() : ^split=res);
+//                 }
+//             }
+//         }
+//         sys_assertIEq("B".split().capacity(), 2) // ["A", null]
+//     )");
+// }
+
+fn returnFromInnerLambdaPass(l()) str {
+    l();
+    "Normal"
+}
+fn returnFromInnerLambdaSkip() str {
+    returnFromInnerLambdaPass{
+        0==0 ?  // let make this fn void, not strictly no_ret
+         ^returnFromInnerLambdaSkip = "From break";
+    }
+}
+test returnFromInnerLambdaTest() {
+    assert(returnFromInnerLambdaSkip() == "From break")
+}
+
+fn forRange(from int, to int, body(int)) {
+    loop !(from < to ? {
+        body(from);
+        from += 1
+    })
+}
+
+test unwind() {
+    x = {
+        forRange(0, 3) `i {
+            i == 1 ? ^x=42
+        };
+        0
+    };
+    assert(42 == x)
+}
+
+class App{
+    asyncOp() {
+        sys_setMainObject(?sys_Object);
+    }
+}
+
+test asyncInnerTest() { // It should 
+    app = App;
+    sys_setMainObject(app);
+    app.asyncOp~();
+}
+
+class MtApp{
+    worker = sys_Thread(sys_Object).start(sys_Object);
+}
+
+test multithreading() {
+    app = MtApp;
+    sys_setMainObject(app);
+    sys_log("Started on main thread. ");
+    app.worker.root().&workerCode(onEnd &()){
+        sys_log("Hello from the worker thread. ");
+        onEnd~();
+    }~(app.&endEverything(){
+        sys_log("Shutdown from the main thread.");
+        sys_setMainObject(?sys_Object);
+    });
+}
+// end
+
+//
+// Sync
+//
+fn ffiTestFn(x int) int; // implemented as: return ff_state += delta;
+fn ffiTestReset(); // implemented as: ff_state = 0;
+
+test foreignFunctionCall() {
+    ffiTestReset();
+    ffiTestFn(4*10);
+    assert(42 == ffiTestFn(2))
+}
+
+class Font {
+    ttfHandle = 0;
+    setId(id int) {
+        ttfHandle != 0 ? ffiTestFn(-ttfHandle);
+        ttfHandle := id;
+        id != 0 ? ffiTestFn(id);
+    }
+}
+
+fn disposeFont(f Font) {
+    f.ttfHandle != 0 ? ffiTestFn(-f.ttfHandle);
+}
+
+fn afterCopyFont(f Font) {
+    f.ttfHandle != 0 ? ffiTestFn(f.ttfHandle);
+}
+
+test raii() {
+    ffiTestReset();
+    {
+        ffiTestFn(2);
+        fa = Font;
+        fa.setId(42);   // foreignTestFunction_state= 2+42
+        fb = @fa;       // foreignTestFunction_state= 2+42+42
+    };                  // foreignTestFunction_state= 2+42+42-42-42 = 2
+    assert(2 == ffiTestFn(0))
+}
+
+//
+// Async
+//
+fn asyncFfiCallbackInvoker(callback &());
+
+class AsyncFfiApp{
+    onCallback() {
+        assert(2 == ffiTestFn(2));
+        sys_setMainObject(?sys_Object);
+    }
+}
+
+test asyncFfi() {
+    ffiTestReset();
+    app = AsyncFfiApp;
+    sys_setMainObject(app);
+    asyncFfiCallbackInvoker(app.onCallback);
+}
+
+test asyncFfiFollowup() {
+    assert(3 == ffiTestFn(3))
+}
+
