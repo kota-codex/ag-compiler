@@ -78,7 +78,7 @@ jobs:
           path: in
       - name: Create per-platform zip archives
         run: |
-          mv in/ag-module in/runtime
+          mv in/ag-module in/lib/sys
           TAG="${GITHUB_REF_NAME#v.}"   # Strip 'v.' prefix (e.g., "2.33")
           TAG=$(echo "$TAG" | cut -d. -f1)  # Extract major version (e.g., "2")
           for PLATFORM in osx linux windows; do
@@ -90,9 +90,9 @@ jobs:
               )
               (
                 cd in &&
-                zip -ur "../$ZIPNAME" runtime
+                zip -ur "../$ZIPNAME" lib/sys
               )
-              done
+            done
           done
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2

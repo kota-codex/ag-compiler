@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.15)
 
 project ("ag-compiler")
 
@@ -73,7 +73,7 @@ target_link_libraries(agc PRIVATE libzip::zip)
 target_link_libraries(agc PRIVATE CURL::libcurl)
 target_link_libraries(agc PRIVATE ag_ffi_header)
 
-set(DST "$<IF:$<BOOL:${AG_TRIPLE}>,${CMAKE_CURRENT_SOURCE_DIR}/out/${AG_TRIPLE},${CMAKE_CURRENT_SOURCE_DIR}/../out>")
+set(DST "$<IF:$<BOOL:${AG_TRIPLE}>,${CMAKE_CURRENT_SOURCE_DIR}/out/bin/${AG_TRIPLE},${CMAKE_CURRENT_SOURCE_DIR}/../out/bin>")
 set_target_properties(agc PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${DST}"
 )
