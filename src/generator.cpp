@@ -536,8 +536,7 @@ struct Generator : ast::ActionScanner {
 				0,  // offset
 				llvm::DINode::DIFlags::FlagNonTrivial,
 				c->base_class ? classes.at(c->base_class).di_cls : di_obj_struct,
-				nullptr,  // fields
-				di_obj_struct);
+				nullptr);  // fields
 			ci.di_ptr = di_builder->createPointerType(ci.di_cls, 64);
 		}
 		for (auto& c : ast->classes_in_order) {
