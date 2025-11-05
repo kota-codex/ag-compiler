@@ -11,7 +11,7 @@
       }
     },
     {
-      "name": "debug",
+      "name": "Debug",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
