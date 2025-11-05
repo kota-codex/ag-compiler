@@ -265,16 +265,26 @@ optional<string> Depot::import_module(Repo::Module& m, stringstream& out_message
     }
     content.erase(agi);
     for (const auto& i : content) {
-        auto ext = i.second.extension();
-        auto str = i.second.string();
-        if (str.find(' ') != std::string::npos)
-            str = ast::format_str('"', str, '"');
-        auto& stream = ext == "lib" || ext == "a" ? links : deps;
-        if (!stream.str().empty())
-            stream << ' ';
-        stream << str;
+        deps.push_back(i.second.string());
     }
     return r;
+}
+
+std::tuple<string, string> Depot::get_links_and_deps() {
+    std::stringstream links;
+    std::stringstream depends;
+    deps.reverse();
+    for (auto s : deps) {
+        auto ext = std::filesystem::path(s).extension().string();
+        auto& stream = ext == "lib" || ext == "a" ? links : depends;
+        if (!stream.str().empty())
+            stream << ' ';
+        stream << (s.find(' ') == std::string::npos)
+            ? s
+            : ast::format_str('"', s, '"');
+    }
+    deps.reverse();
+    return { links.str(), depends.str() };
 }
 
 string Depot::read_source(string moduleName, int64_t& version, string& out_path) {
