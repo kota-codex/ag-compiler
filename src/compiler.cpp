@@ -50,24 +50,31 @@ static void write_file(const string& name, const string& content) {
     }
 }
 
-#define AK_DBG
+//#define AK_DBG
 #ifdef AK_DBG
 int ak_main(int argc, const char* argv[]);
 int main(int argc, char* argv[]) {
     const char* params[] = {
-        "-g"
-        "-src" "..\examples"
-        "-start" "test"
-        "-O3"
-        "-o" "hw.obj"
+        "C:\\Users\\ak\\cpp\\ag\\out\\bin\\agc",
+        "-g",
+        "-src", "C:\\Users\\ak\\cpp\\ag\\out\\examples\\",
+        "-src", "C:\\Users\\ak\\cpp\\ag\\out\\bin\\..\\lib",
+        "-start", "helloWorld",
+        "-O0",
+        "-o", "helloWorld.obj",
+        "-L", "helloWorld.lnk",
+        "-D", "helloWorld.rs"
     };
     return ak_main(sizeof(params)/sizeof(params[0]), params);
 }
 int ak_main(int argc, const char* argv[]) {
+    int garbage_argc = argc;
+    const char** garbage_argv = argv;
+    llvm::InitLLVM X(garbage_argc, garbage_argv);
 #else
 int main(int argc, char* argv[]) {
-#endif
     llvm::InitLLVM X(argc, argv);
+#endif
     if (argc < 2) {
         llvm::outs() <<
                 "Argentum compiler by Andrey Kamlatskiy.\n"
@@ -154,6 +161,9 @@ int main(int argc, char* argv[]) {
     auto ast = own<Ast>::make();
     ast->test_filter = test_filter;
     register_runtime_content(*ast);
+    int64_t unused_sys_version = 0;
+    string inised_sys_out_path;
+    depot.read_source("sys", unused_sys_version, inised_sys_out_path);
     parse(ast, start_module_name, [&](auto name, auto& version, auto& out_path) {
         return depot.read_source(name, version, out_path);
     });
@@ -213,16 +223,15 @@ int main(int argc, char* argv[]) {
         }
         out_file.flush();
         auto [links, deps] = depot.get_links_and_deps();
-        bool out_written = false;
-        if (link_list_file.empty()) {
-            llvm::outs() << out_file_name;
-            out_written = true;
-        } else write_file(link_list_file, links);
-        if (dep_list_file.empty()) {
-            if (out_written)
-                llvm::outs() << "\n";
-            out_written = true;
-        } else write_file(dep_list_file, deps);
+        links = out_file_name + " " + links;
+        if (link_list_file.empty())
+            llvm::outs() << links << '\n';
+        else
+            write_file(link_list_file, links);
+        if (dep_list_file.empty())
+            llvm::outs() << deps << '\n';
+        else
+            write_file(dep_list_file, deps);
     });
     return 0;
 }
