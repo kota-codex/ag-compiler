@@ -5,7 +5,7 @@
 
 using module_text_provider_t = const std::function<std::string(
 	std::string name,
-	int64_t& version, // in-requestd, out-provided
+	int64_t& version, // in-min_requested (0-any), out-provided
 	std::string& out_path)>&;
 
 void parse(

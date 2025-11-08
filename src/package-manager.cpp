@@ -17,8 +17,8 @@
 #include "ast.h"
 
 namespace {
-    std::regex file_re(R"(^([A-Za-z0-9]+)-([0-9]+)\.ag$)");
-    std::regex dir_re(R"(^([A-Za-z0-9]+)-([0-9]+)$)");
+    std::regex file_re(R"(^([A-Za-z0-9]+)(?:-([0-9]+))?\.ag$)");
+    std::regex dir_re(R"(^([A-Za-z0-9]+)(?:-([0-9]+))?$)");
 }
 using std::optional;
 using std::nullopt;
@@ -187,7 +187,12 @@ void Depot::add(string address) {
         r.url = r.path.substr(pos + 2);
         r.path.resize(pos);
     }
-    for (auto& entry : fs::directory_iterator(r.path)) {
+    std::error_code ec;
+    for (auto& entry : fs::directory_iterator(r.path, ec)) {
+        if (ec) {
+            std::cerr << "Error reading dir entry in " << r.path << ": " << ec.message() << "\n";
+            continue;
+        }
         string name = entry.path().filename().string();
         std::smatch match;
         if (std::regex_match(
@@ -196,7 +201,7 @@ void Depot::add(string address) {
             entry.is_regular_file() ? file_re : dir_re))
         {
             std::string name = match[1];
-            auto version = atoll(match[2].str().c_str());
+            auto version = atoll(match[2].str().c_str()); // 0 if none
             Repo::Module& m = r.modules[name];
             if (version < m.version)
                 continue;
@@ -206,6 +211,8 @@ void Depot::add(string address) {
             m.name = name;
         }
     }
+    if (ec)
+        std::cerr << "Error opening " << r.path << ": " << ec.message() << "\n";
 }
 
 optional<string> Depot::import_module(Repo::Module& m, stringstream& out_messages) {
@@ -216,10 +223,15 @@ optional<string> Depot::import_module(Repo::Module& m, stringstream& out_message
         return r;
     }
     unordered_map<string, fs::path> content;
-    auto scan_dir = [&](const string& path, function<bool(const string&)> dir_matcher, const string& reason) {
+    auto scan_dir = [&](const string& path, function<bool(const string&)> dir_matcher, const string& reason) -> optional<string> {
         string dir_to_go;
         bool has_dirs = false;
-        for (auto& entry : fs::directory_iterator(path)) {
+        std::error_code ec;
+        for (auto& entry : fs::directory_iterator(path, ec)) {
+            if (ec) {
+                std::cerr << "Error reading dir entry in " << path << ": " << ec.message() << "\n";
+                continue;
+            }
             if (*entry.path().filename().generic_string().c_str() == '-')
                 continue;
             if (entry.is_regular_file()) {
@@ -230,8 +242,11 @@ optional<string> Depot::import_module(Repo::Module& m, stringstream& out_message
                     dir_to_go = entry.path().generic_string();
             }
         }
+        if (ec)
+            std::cerr << "Error opening dir " << path << ": " << ec.message() << "\n";
         if (has_dirs && dir_to_go.empty()) {
             out_messages << m.path << " has dirs" << reason << std::endl;
+            return nullopt;
         }
         return dir_to_go;
     };
@@ -245,14 +260,18 @@ optional<string> Depot::import_module(Repo::Module& m, stringstream& out_message
                 my.getEnvironment() == llvm::Triple::UnknownEnvironment ||
                 dirs.getEnvironment() == llvm::Triple::UnknownEnvironment);
         }, ast::format_str(", but no match for ", triplet));
-    if (!triple_dir.empty()) {
-        auto dbg_rel_dir = scan_dir(triple_dir, [&](const string& name) {
+    if (!triple_dir)
+        return nullopt;
+    if (!triple_dir->empty()) {
+        auto dbg_rel_dir = scan_dir(*triple_dir, [&](const string& name) {
             return name == debug_release;
             }, ast::format_str(", but no ", debug_release, " dir"));
-        if (!dbg_rel_dir.empty()) {
-            scan_dir(triple_dir, [&](const string& name) { return true; }, "");
-        } else return nullopt;
-    } else return nullopt;
+        if (!dbg_rel_dir)
+            return nullopt;
+        if (!dbg_rel_dir->empty()) {
+            scan_dir(*dbg_rel_dir, [&](const string& name) { return true; }, "");
+        }
+    }
     auto agi = content.find(m.name + ".ag");
     if (agi == content.end()) {
         out_messages << "no " << m.name << ".ag in " << m.path << std::endl;
@@ -276,12 +295,12 @@ std::tuple<string, string> Depot::get_links_and_deps() {
     deps.reverse();
     for (auto s : deps) {
         auto ext = std::filesystem::path(s).extension().string();
-        auto& stream = ext == "lib" || ext == "a" ? links : depends;
+        auto& stream = ext == ".lib" || ext == ".a" ? links : depends;
         if (!stream.str().empty())
             stream << ' ';
-        stream << (s.find(' ') == std::string::npos)
+        stream << ((s.find(' ') == std::string::npos)
             ? s
-            : ast::format_str('"', s, '"');
+            : ast::format_str('"', s, '"'));
     }
     deps.reverse();
     return { links.str(), depends.str() };

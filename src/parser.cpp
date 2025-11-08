@@ -184,7 +184,7 @@ struct Parser {
 		match_ws();
 		while (match("using")) {
 			auto using_name = expect_id("imported module");
-			int64_t using_version = std::numeric_limits<int64_t>::max();
+			int64_t using_version = 0;
 			if (is_num(*cur)) {
 				auto n = match_num();
 				if (auto v = get_if<uint32_t>(&*n))
@@ -1370,7 +1370,7 @@ void parse(
 {
 	std::unordered_set<string> modules_in_dep_path;
 	ast->starting_module = Parser(ast, start_module_name, modules_in_dep_path)
-		.parse(module_text_provider, std::numeric_limits<int64_t>::max());
+		.parse(module_text_provider, 0);
 	if (!ast->test_filter.empty()) {
 		try {
 			std::regex filter(ast->test_filter, std::regex::ECMAScript);
