@@ -57,13 +57,13 @@ int main(int argc, char* argv[]) {
     const char* params[] = {
         "C:\\Users\\ak\\cpp\\ag\\out\\bin\\agc",
         "-g",
-        "-src", "C:\\Users\\ak\\cpp\\ag\\out\\examples\\",
+        "-src", "C:\\Users\\ak\\cpp\\ag\\out\\examples",
         "-src", "C:\\Users\\ak\\cpp\\ag\\out\\bin\\..\\lib",
-        "-start", "helloWorld",
+        "-start", "fizzBuzz",
         "-O0",
-        "-o", "helloWorld.obj",
-        "-L", "helloWorld.lnk",
-        "-D", "helloWorld.rs"
+        "-o", "helloWorld",
+        "-L", "lnk",
+        "-D", "dep"
     };
     return ak_main(sizeof(params)/sizeof(params[0]), params);
 }
@@ -157,6 +157,14 @@ int main(int argc, char* argv[]) {
     };
     check_str(start_module_name, "start module");
     check_str(out_file_name, "output file");
+    if (out_file_name.find('.') == string::npos) {
+        out_file_name += '.';
+        out_file_name +=
+            output_bitcode ? (output_asm ? "ll" : "bc") :
+            target_triple.find("windows") == string::npos
+                ? (output_asm ? "s" : "o")
+                : (output_asm ? "asm" : "obj");
+    }
     ast::initialize();
     auto ast = own<Ast>::make();
     ast->test_filter = test_filter;
