@@ -317,6 +317,7 @@ string Depot::read_source(string moduleName, int64_t& version, string& out_path)
             }
             if (auto r = import_module(m, messages)) {
                 version = m.version;
+                out_path = m.path;
                 return *r;
             }
         }
@@ -344,11 +345,13 @@ string Depot::read_source(string moduleName, int64_t& version, string& out_path)
         } else {
             repo.modules.insert({ moduleName, Repo::Module{ newPath, true, *newVersion, moduleName } });
         }
-        if (auto r = import_module(repo.modules[moduleName], messages)) {
-            version = repo.modules[moduleName].version;
+        auto& m = repo.modules[moduleName];
+        if (auto r = import_module(m, messages)) {
+            version = m.version;
+            out_path = m.path;
             return *r;
         }
     }
-    std::cerr << "Can't locale module :" << moduleName << messages.str() << std::endl;
+    std::cerr << "Can't locale module :" << moduleName << " " << messages.str() << std::endl;
     panic();
 }
