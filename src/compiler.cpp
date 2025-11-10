@@ -59,9 +59,9 @@ int main(int argc, char* argv[]) {
         "-g",
         "-src", "C:\\Users\\ak\\cpp\\ag\\out\\examples",
         "-src", "C:\\Users\\ak\\cpp\\ag\\out\\bin\\..\\lib",
-        "-start", "fizzBuzz",
+        "-start", "sqliteDemo",
         "-O0",
-        "-o", "helloWorld",
+        "-o", "sqliteDemo",
         "-L", "lnk",
         "-D", "dep"
     };
@@ -171,6 +171,7 @@ int main(int argc, char* argv[]) {
     register_runtime_content(*ast);
     int64_t unused_sys_version = 0;
     string inised_sys_out_path;
+    depot.init(target_triple, add_debug_info);
     depot.read_source("sys", unused_sys_version, inised_sys_out_path);
     parse(ast, start_module_name, [&](auto name, auto& version, auto& out_path) {
         return depot.read_source(name, version, out_path);

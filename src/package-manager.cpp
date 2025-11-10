@@ -174,9 +174,35 @@ optional<string> read_file(string file_name) {
     }
 }
 
-void Depot::init(string triplet, bool debug_release) {
-    this->triplet = move(triplet);
-    this->debug_release = debug_release ? "Debug" : "Release";
+void Depot::init(string llvm_triplet, bool is_debug) {
+    llvm::Triple t(llvm_triplet);
+    using namespace llvm;
+    std::string arch;
+    switch (t.getArch()) {
+    case Triple::ArchType::x86_64:  arch = "x64"; break;
+    case Triple::ArchType::aarch64: arch = "arm64"; break;
+    case Triple::ArchType::wasm64:  arch = "wasm64"; break;
+    case Triple::ArchType::riscv64: arch = "riscv64"; break;
+    default: arch = "unsupported_" + t.getArchName().str(); break;
+    }
+    std::string os;
+    switch (t.getOS()) {
+    case Triple::OSType::Win32:   os = "windows"; break;
+    case Triple::OSType::Linux:   os = "linux"; break;
+    case Triple::OSType::Darwin:  os = "osx"; break;
+    case Triple::OSType::FreeBSD: os = "freebsd"; break;
+    case Triple::OSType::IOS:     os = "ios"; break;
+    case Triple::OSType::Emscripten: os = "emscripten"; break;
+    default: os = "unsupported_" + t.getOSName().str(); break;
+    }
+    std::string suffix;
+    switch (t.getEnvironment()) {
+    case Triple::GNU:     suffix = "-gnu"; break;
+    case Triple::Android: os = "android"; break;
+    default: break;
+    }
+    this->vcpkg_triplet = arch + "-" + os + suffix;
+    this->debug_release = is_debug ? "Debug" : "Release";
 }
 
 void Depot::add(string address) {
@@ -223,7 +249,7 @@ optional<string> Depot::import_module(Repo::Module& m, stringstream& out_message
         return r;
     }
     unordered_map<string, fs::path> content;
-    function<bool(const string&, optional<llvm::Triple>, bool)> scan_dir = [&](const string& path, auto my_triple, bool search_deb_rel) {
+    function<bool(const string&, const string&, bool)> scan_dir = [&](const string& path, const string& my_triple, bool search_deb_rel) {
         string tripple_dir, deb_rel_dir;
         bool has_dirs = false;
         std::error_code ec;
@@ -241,38 +267,32 @@ optional<string> Depot::import_module(Repo::Module& m, stringstream& out_message
                 auto name = entry.path().filename().generic_string();
                 if (search_deb_rel && name == debug_release)
                     deb_rel_dir = entry.path().generic_string();
-                else if (my_triple) {
-                    llvm::Triple dirs(name.c_str());
-                    if (// ok to ignore vendor?
-                        my_triple->getArch() == dirs.getArch() &&
-                        my_triple->getOS() == dirs.getOS() && (
-                            my_triple->getEnvironment() == dirs.getEnvironment() ||
-                            my_triple->getEnvironment() == llvm::Triple::UnknownEnvironment ||
-                            dirs.getEnvironment() == llvm::Triple::UnknownEnvironment))
+                else if (!my_triple.empty()) {
+                    if (my_triple == name)
                         tripple_dir = entry.path().generic_string();
                 }
             }
         }
         if (ec)
             std::cerr << "Error opening dir " << path << ": " << ec.message() << "\n";
-        if (!deb_rel_dir.empty() && !scan_dir(deb_rel_dir, nullopt, false))
+        if (!deb_rel_dir.empty() && !scan_dir(deb_rel_dir, "", false))
             return false; // deb_rel dir has unwanted subdirs
-        if (!tripple_dir.empty() && !scan_dir(tripple_dir, nullopt, true))
+        if (!tripple_dir.empty() && !scan_dir(tripple_dir, "", true))
             return false;
         if (has_dirs && deb_rel_dir.empty() && tripple_dir.empty()) {
             out_messages << path << " has dirs";
-            if (search_deb_rel || my_triple) {
+            if (search_deb_rel || !my_triple.empty()) {
                 out_messages << " but no matching "
                     << (search_deb_rel ? debug_release : "")
-                    << (search_deb_rel && my_triple ? " or " : "")
-                    << (my_triple ? my_triple->str() : "");
+                    << (search_deb_rel && !my_triple.empty() ? " or " : "")
+                    << my_triple;
             }
             out_messages << "\n";
             return false;
         }
         return true;
     };
-    if (!scan_dir(m.path, llvm::Triple(triplet.c_str()), true))
+    if (!scan_dir(m.path, vcpkg_triplet, true))
         return nullopt;
     auto agi = content.find(m.name + ".ag");
     if (agi == content.end()) {
