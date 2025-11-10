@@ -176,7 +176,7 @@ optional<string> read_file(string file_name) {
 
 void Depot::init(string triplet, bool debug_release) {
     this->triplet = move(triplet);
-    this->debug_release = debug_release ? "debug" : "release";
+    this->debug_release = debug_release ? "Debug" : "Release";
 }
 
 void Depot::add(string address) {
@@ -223,14 +223,14 @@ optional<string> Depot::import_module(Repo::Module& m, stringstream& out_message
         return r;
     }
     unordered_map<string, fs::path> content;
-    auto scan_dir = [&](const string& path, function<bool(const string&)> dir_matcher, const string& reason) -> optional<string> {
-        string dir_to_go;
+    function<bool(const string&, optional<llvm::Triple>, bool)> scan_dir = [&](const string& path, auto my_triple, bool search_deb_rel) {
+        string tripple_dir, deb_rel_dir;
         bool has_dirs = false;
         std::error_code ec;
         for (auto& entry : fs::directory_iterator(path, ec)) {
             if (ec) {
                 std::cerr << "Error reading dir entry in " << path << ": " << ec.message() << "\n";
-                continue;
+                return false;
             }
             if (*entry.path().filename().generic_string().c_str() == '-')
                 continue;
@@ -238,40 +238,42 @@ optional<string> Depot::import_module(Repo::Module& m, stringstream& out_message
                 content[entry.path().filename().generic_string()] = entry.path();
             } else {
                 has_dirs = true;
-                if (dir_matcher(entry.path().filename().generic_string()))
-                    dir_to_go = entry.path().generic_string();
+                auto name = entry.path().filename().generic_string();
+                if (search_deb_rel && name == debug_release)
+                    deb_rel_dir = entry.path().generic_string();
+                else if (my_triple) {
+                    llvm::Triple dirs(name.c_str());
+                    if (// ok to ignore vendor?
+                        my_triple->getArch() == dirs.getArch() &&
+                        my_triple->getOS() == dirs.getOS() && (
+                            my_triple->getEnvironment() == dirs.getEnvironment() ||
+                            my_triple->getEnvironment() == llvm::Triple::UnknownEnvironment ||
+                            dirs.getEnvironment() == llvm::Triple::UnknownEnvironment))
+                        tripple_dir = entry.path().generic_string();
+                }
             }
         }
         if (ec)
             std::cerr << "Error opening dir " << path << ": " << ec.message() << "\n";
-        if (has_dirs && dir_to_go.empty()) {
-            out_messages << m.path << " has dirs" << reason << std::endl;
-            return nullopt;
+        if (!deb_rel_dir.empty() && !scan_dir(deb_rel_dir, nullopt, false))
+            return false; // deb_rel dir has unwanted subdirs
+        if (!tripple_dir.empty() && !scan_dir(tripple_dir, nullopt, true))
+            return false;
+        if (has_dirs && deb_rel_dir.empty() && tripple_dir.empty()) {
+            out_messages << path << " has dirs";
+            if (search_deb_rel || my_triple) {
+                out_messages << " but no matching "
+                    << (search_deb_rel ? debug_release : "")
+                    << (search_deb_rel && my_triple ? " or " : "")
+                    << (my_triple ? my_triple->str() : "");
+            }
+            out_messages << "\n";
+            return false;
         }
-        return dir_to_go;
+        return true;
     };
-    auto triple_dir = scan_dir(m.path, [&](const string& name) {
-        llvm::Triple my(triplet.c_str());
-        llvm::Triple dirs(name.c_str());
-        return  // ok to ignore vendor?
-            my.getArch() == dirs.getArch() &&
-            my.getOS() == dirs.getOS() && (
-                my.getEnvironment() == dirs.getEnvironment() ||
-                my.getEnvironment() == llvm::Triple::UnknownEnvironment ||
-                dirs.getEnvironment() == llvm::Triple::UnknownEnvironment);
-        }, ast::format_str(", but no match for ", triplet));
-    if (!triple_dir)
+    if (!scan_dir(m.path, llvm::Triple(triplet.c_str()), true))
         return nullopt;
-    if (!triple_dir->empty()) {
-        auto dbg_rel_dir = scan_dir(*triple_dir, [&](const string& name) {
-            return name == debug_release;
-            }, ast::format_str(", but no ", debug_release, " dir"));
-        if (!dbg_rel_dir)
-            return nullopt;
-        if (!dbg_rel_dir->empty()) {
-            scan_dir(*dbg_rel_dir, [&](const string& name) { return true; }, "");
-        }
-    }
     auto agi = content.find(m.name + ".ag");
     if (agi == content.end()) {
         out_messages << "no " << m.name << ".ag in " << m.path << std::endl;
