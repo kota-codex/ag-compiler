@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
         "C:\\Users\\ak\\cpp\\ag\\out\\bin\\agc",
         "-g",
         "-src", "C:\\Users\\ak\\cpp\\ag\\out\\examples",
-        "-src", "C:\\Users\\ak\\cpp\\ag\\out\\bin\\..\\lib",
+        "-src", "C:\\Users\\ak\\cpp\\ag\\out\\bin\\..\\lib::https://aglang.org/wp-json/repo/v1",
         "-start", "sqliteDemo",
         "-O0",
         "-o", "sqliteDemo",
@@ -234,11 +234,11 @@ int main(int argc, char* argv[]) {
         auto [links, deps] = depot.get_links_and_deps();
         links = out_file_name + " " + links;
         if (link_list_file.empty())
-            llvm::outs() << links << '\n';
+            llvm::outs() << "LIBS: " << links << '\n';
         else
             write_file(link_list_file, links);
         if (dep_list_file.empty())
-            llvm::outs() << deps << '\n';
+            llvm::outs() << "DEPS: " << deps << '\n';
         else
             write_file(dep_list_file, deps);
     });
