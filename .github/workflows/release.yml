@@ -15,16 +15,21 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup dependencies
-        shell: pwsh
-        run: |
-          choco install -y git cmake ninja visualstudio2022buildtools windows-sdk-10.0
-      - name: Setup MSVC environment
-        uses: ilammy/msvc-dev-cmd@v1
+      - uses: lukka/get-cmake@latest
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          doNotCache: false
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Build Windows x64
+        run: build-win.bat x64-windows
+      - uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: amd64_arm64
-      - name: Build Windows (x64 + arm64)
-        run: build-win.bat
+      - name: Build Windows arm64
+        run: build-win.bat arm64-windows
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -41,8 +46,7 @@ jobs:
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
-          vcpkgGitCommitId: '62324000504cdd27282f8275c99135cfb2bd1dc0'
-          runVcpkgInstall: true
+          doNotCache: false
       - name: Build Linux
         run: build-linux.sh
       - name: Upload artifacts
@@ -60,8 +64,7 @@ jobs:
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
-          vcpkgGitCommitId: '62324000504cdd27282f8275c99135cfb2bd1dc0'
-          runVcpkgInstall: true
+          doNotCache: false
       - name: Build macOS
         run: build-apple.sh
       - name: Upload artifacts
@@ -76,6 +79,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: in
+      - uses: actions/checkout@v4
+        with:
+          repository: kota-codex/ag
+          path: ag
       - name: Create per-platform zip archives
         run: |
           mv in/ag-module in/lib/sys
@@ -91,6 +98,10 @@ jobs:
               (
                 cd in &&
                 zip -ur "../$ZIPNAME" lib/sys
+              )
+              (
+                cd ag/out &&
+                zip -ur "../../$ZIPNAME" .
               )
             done
           done
