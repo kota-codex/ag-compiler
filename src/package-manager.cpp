@@ -42,22 +42,32 @@ struct Curl {
             curl_easy_cleanup(curl);
         curl_global_cleanup();
     }
-    vector<char> load(const string& url) {
+    static size_t write_fn (void* contents, size_t size, size_t nmemb, void* userp) {
+        size_t total = size * nmemb;
+        auto& buffer = *reinterpret_cast<vector<char>*>(userp);
+        auto data = reinterpret_cast<char*>(contents);
+        buffer.insert(buffer.end(), data, data + total);
+        return total;
+    }
+    vector<char> load(const string& url, stringstream& out_messages) {
+        std::cout << "Loading: " << url << std::endl;
         vector<char> result;
         if (curl) {
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
             curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, [](void* contents, size_t size, size_t nmemb, void* userp) {
-                size_t total = size * nmemb;
-                auto& buffer = *reinterpret_cast<vector<char>*>(userp);
-                auto data = reinterpret_cast<char*>(contents);
-                buffer.insert(buffer.end(), data, data + total);
-                return total;
-            });
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_fn);
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &result);
             CURLcode code = curl_easy_perform(curl);
             if (code != CURLE_OK) {
-                std::cerr << "Download failed: " << curl_easy_strerror(code) << "\n";
+                out_messages << "Download failed: " << curl_easy_strerror(code) << " for URL: " << url << "\n";
+                result.clear();
+            } else {
+                long response_code = 0;
+                curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+                if (response_code != 200) {
+                    std::cerr << "HTTP error: " << response_code << " for URL: " << url << "\n";
+                    result.clear();
+                }
             }
         }
         return result;
@@ -69,14 +79,15 @@ struct Zip {
     std::vector<char> data;
     zip_source_t* src = nullptr;
     zip_t* zip = nullptr;
-    Zip(std::vector<char> data) :data(move(data)) {
-        zip_error_t err{};
+    zip_error_t err;
+    Zip(std::vector<char> d) :data(move(d)) {
+        zip_error_init(&err);
         src = zip_source_buffer_create(data.data(), data.size(), 0, &err);
         if (!src) {
             std::cerr << "zip_source_buffer_create failed " << zip_error_strerror(&err) << "\n";
             return;
         }
-        zip = zip_open_from_source(src, 0, &err);
+        zip = zip_open_from_source(src, ZIP_RDONLY | ZIP_CHECKCONS, &err);
         if (!zip) {
             std::cerr << "zip_open_from_source failed " << zip_error_strerror(&err) << "\n";
             return;
@@ -87,6 +98,7 @@ struct Zip {
             zip_close(zip);
         if (src)
             zip_source_free(src);
+        zip_error_fini(&err);
     }
     template<typename Fn>
     void for_each(Fn fn) {
@@ -128,16 +140,16 @@ optional<int64_t> unzip_from_memory(std::vector<char> data, const std::string& o
     Zip zip(move(data));
     zip.for_each([&](struct zip_stat& f) {
         if (!version) {
-            static const std::regex re(R"(^([a-zA-Z0-9]+)-(\d+)/)");
+            static const std::regex re(R"(^([a-zA-Z0-9]+)-(\d+)(?:\/.*|(\.)ag)$)");
             std::cmatch m;
-            if (!std::regex_match(f.name, m, re) || package != m[2]) {
-                std::cerr << "Downloaded zip does not contain folder " << package << "-version\n";
+            if (!std::regex_match(f.name, m, re) || package != m[1]) {
+                std::cerr << "Downloaded zip does not contain file or folder " << package << "-version\n";
                 return false;
             }
             version = atoll(m[2].str().c_str());
-            base_path = ast::format_str(m[1].str(), '-', *version);
+            base_path = ast::format_str(m[1].str(), '-', *version, m[3].matched ? ".ag" : "");
         } else if (*fs::path(f.name).begin() != base_path) {
-            std::cerr << "Downloaded zip contains multiple root folders";
+            std::cerr << "Downloaded zip contains multiple root files or folders";
             version = nullopt;
             return false;
         }
@@ -347,21 +359,19 @@ string Depot::read_source(string moduleName, int64_t& version, string& out_path)
     for (auto& repo : repos) {
         if (repo.url.empty())
             continue;
-        auto mi = repo.modules.find(moduleName);
-        if (mi != repo.modules.end() && !mi->second.is_directory)
-            continue; // file-based modules arent cloud-updateable
-        auto data = curl.load(ast::format_str(repo.url, '/', moduleName, '/', version));
+        auto data = curl.load(ast::format_str(repo.url, '/', moduleName, '/', version), messages);
         if (data.empty())
             continue;
         auto newVersion = unzip_from_memory(data, repo.path, moduleName);
         if (!newVersion)
             continue;
         auto newPath = ast::format_str(repo.path, '/', moduleName, '-', *newVersion);
+        auto mi = repo.modules.find(moduleName);
         if (mi != repo.modules.end()) {
             auto& m = mi->second;
             fs::rename(
                 m.path,
-                ast::format_str(repo.path, '/', moduleName, "_old-", m.version));
+                ast::format_str(repo.path, "/-old-", moduleName, '-', m.version));
             m.path = newPath;
             m.version = *newVersion;
         } else {
