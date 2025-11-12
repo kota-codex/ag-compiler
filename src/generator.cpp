@@ -3582,8 +3582,3 @@ llvm::orc::ThreadSafeModule generate_code(ltm::pin<ast::Ast> ast, bool add_debug
 	Generator gen(ast, add_debug_info);
 	return gen.build(entry_point_name);
 }
-
-static bool llvm_inited = false;
-static const char* arg = "";
-static const char** argv = &arg;
-static int argc = 0;
