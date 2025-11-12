@@ -38,6 +38,7 @@ jobs:
   build-comp-linux:
     runs-on: ubuntu-latest
     steps:
+      - uses: easimon/free-disk-space-ubuntu@main
       - uses: actions/checkout@v4
       - name: Install dependencies
         run: |
