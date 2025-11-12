@@ -24,12 +24,12 @@ jobs:
         with:
           arch: x64
       - name: Build Windows x64
-        run: build-win.bat x64-windows
+        run: .\build-win.bat x64-windows
       - uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: amd64_arm64
       - name: Build Windows arm64
-        run: build-win.bat arm64-windows
+        run: .\build-win.bat arm64-windows
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -48,7 +48,7 @@ jobs:
         with:
           doNotCache: false
       - name: Build Linux
-        run: build-linux.sh
+        run: ./build-linux.sh
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -66,7 +66,7 @@ jobs:
         with:
           doNotCache: false
       - name: Build macOS
-        run: build-apple.sh
+        run: ./build-apple.sh
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
