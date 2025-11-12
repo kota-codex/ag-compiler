@@ -37,6 +37,7 @@ for tripleEntry in "${TRIPLES[@]}"; do
       -DCMAKE_BUILD_TYPE="${config}"
       -DAG_OUT_DIR="${OUT_DIR}"
       -DAG_TRIPLE="${triple}"
+      -DVCPKG_INSTALL_OPTIONS="--allow-unsupported"
     )
 
     if [[ "$triple" == *"android"* ]]; then
