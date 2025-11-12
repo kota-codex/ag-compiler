@@ -13,7 +13,14 @@ jobs:
 #    secrets: inherit
   build-comp-windows:
     runs-on: windows-latest
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg_cache
     steps:
+      - name: Cache vcpkg binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg_cache
+          key: vcpkg-windows
       - uses: actions/checkout@v4
       - uses: lukka/get-cmake@latest
       - name: Setup vcpkg
@@ -37,8 +44,15 @@ jobs:
           path: out
   build-comp-linux:
     runs-on: ubuntu-latest
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg_cache
     steps:
       - uses: easimon/free-disk-space-ubuntu@main
+      - name: Cache vcpkg binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg_cache
+          key: vcpkg-linux
       - uses: actions/checkout@v4
       - name: Install dependencies
         run: |
@@ -57,7 +71,15 @@ jobs:
           path: out
   build-comp-apple:
     runs-on: macos-latest
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg_cache
     steps:
+      - uses: easimon/free-disk-space-ubuntu@main
+      - name: Cache vcpkg binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.vcpkg_cache
+          key: vcpkg-apple
       - uses: actions/checkout@v4
       - name: Install dependencies
         run: |
