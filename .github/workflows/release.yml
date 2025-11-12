@@ -5,12 +5,12 @@ on:
 permissions:
   contents: write
 jobs:
-  build-runtime:
-    uses: kota-codex/ag-modules-ci/.github/workflows/build.yml@main
-    with:
-      repository: kota-codex/ag-runtime
-      ref: main
-    secrets: inherit
+#  build-runtime:
+#    uses: kota-codex/ag-modules-ci/.github/workflows/build.yml@main
+#    with:
+#      repository: kota-codex/ag-runtime
+#      ref: main
+#    secrets: inherit
   build-comp-windows:
     runs-on: windows-latest
     steps:
@@ -74,7 +74,7 @@ jobs:
           path: out
   package:
     runs-on: ubuntu-latest
-    needs: [build-comp-windows, build-comp-linux, build-comp-apple, build-runtime]
+    needs: [build-comp-windows, build-comp-linux, build-comp-apple] #build-runtime
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -85,7 +85,7 @@ jobs:
           path: ag
       - name: Create per-platform zip archives
         run: |
-          mv in/ag-module in/lib/sys
+          # mv in/ag-module in/lib/sys
           TAG="${GITHUB_REF_NAME#v.}"   # Strip 'v.' prefix (e.g., "2.33")
           TAG=$(echo "$TAG" | cut -d. -f1)  # Extract major version (e.g., "2")
           for PLATFORM in osx linux windows; do
@@ -95,14 +95,8 @@ jobs:
                 cd "in/${PLATFORM}-comp-out/${ARCH}-${PLATFORM}" &&
                 zip -r "../../../$ZIPNAME" .
               )
-              (
-                cd in &&
-                zip -ur "../$ZIPNAME" lib/sys
-              )
-              (
-                cd ag/out &&
-                zip -ur "../../$ZIPNAME" .
-              )
+              #(cd in && zip -ur "../$ZIPNAME" lib/sys)
+              #(cd ag/out &&zip -ur "../../$ZIPNAME" .)
             done
           done
       - name: Publish GitHub Release
