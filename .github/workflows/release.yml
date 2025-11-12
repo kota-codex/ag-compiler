@@ -74,7 +74,8 @@ jobs:
     env:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg_cache
     steps:
-      - uses: easimon/free-disk-space-ubuntu@main
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
       - name: Cache vcpkg binaries
         uses: actions/cache@v4
         with:
