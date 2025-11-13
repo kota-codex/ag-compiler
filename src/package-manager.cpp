@@ -92,6 +92,7 @@ struct Zip {
             std::cerr << "zip_open_from_source failed " << zip_error_strerror(&err) << "\n";
             return;
         }
+        src = nullptr;
     }
     ~Zip() {
         if (zip)
