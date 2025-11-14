@@ -1,6 +1,7 @@
 name: Compiler-build
 on:
-  workflow_call:
+  workflow_call: {}     # activate from release_c
+  workflow_dispatch: {} # call manually to create cache
 permissions:
   contents: read
 env:

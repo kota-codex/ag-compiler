@@ -1,7 +1,10 @@
 name: Cross-platform build-release-tag Compiler
 
 on:
-  workflow_call: {}
+  workflow_dispatch: {} # manual dirty build tagged with date-time
+  push:  # official build on tag v.incompatible-version.backward-compatible-version
+    tags:
+      - 'v.*'
 permissions:
   contents: write
 jobs:
@@ -24,7 +27,6 @@ jobs:
         run: |
           # mv in/ag-module in/lib/sys
           TAG="${GITHUB_REF_NAME#v.}"
-          TAG=$(echo "$TAG" | cut -d. -f1)
           if [ -z "$TAG" ]; then
             TAG=$(date +%Y%m%d-%H%M)
           fi
