@@ -1,0 +1,115 @@
+name: Compiler-build
+on:
+  workflow_call:
+permissions:
+  contents: read
+env:
+  VCPKG_BINARY_SOURCES: 'files,${{ github.workspace }}/vcpkg-cache,readwrite;default'
+  VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg-cache
+  VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+jobs:
+  build-windows-x64:
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-latest
+          - arch: arm64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make sure vcpkg-cache exists
+        shell: bash
+        run: mkdir -p "${{ github.workspace }}/vcpkg-cache"
+      - name: Cache vcpkg binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg-cache
+          key: vcpkg-binc-win-${{ matrix.arch }}
+          restore-keys: |
+            vcpkg-binc-win-${{ matrix.arch }}
+      - uses: lukka/get-cmake@latest
+      - name: Install vcpkg
+        shell: bash
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          ./vcpkg/bootstrap-vcpkg.sh
+          echo "$(pwd)/vcpkg" >> $GITHUB_PATH
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch }}
+      - name: Build Windows ${{ matrix.arch }}
+        run: .\build-win.bat ${{ matrix.arch }}-windows
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-${{ matrix.arch }}-c-out
+          path: out
+  build-comp-linux:
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+      - uses: actions/checkout@v4
+      - name: Make sure vcpkg-cache exists
+        shell: bash
+        run: mkdir -p "${{ github.workspace }}/vcpkg-cache"
+      - name: Cache vcpkg binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg-cache
+          key: vcpkg-binc-lin-${{ matrix.arch }}
+          restore-keys: |
+            vcpkg-binc-lin-${{ matrix.arch }}
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+      - name: Install vcpkg
+        shell: bash
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          ./vcpkg/bootstrap-vcpkg.sh
+          echo "$(pwd)/vcpkg" >> $GITHUB_PATH
+      - name: Build Linux
+        run: ./build-linux.sh
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lin-${{ matrix.arch }}-c-out
+          path: out
+  build-comp-apple:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make sure vcpkg-cache exists
+        shell: bash
+        run: mkdir -p "${{ github.workspace }}/vcpkg-cache"
+      - name: Cache vcpkg binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg-cache
+          key: vcpkg-binc-apple
+          restore-keys: |
+            vcpkg-binc-apple
+      - name: Install vcpkg
+        shell: bash
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          ./vcpkg/bootstrap-vcpkg.sh
+          echo "$(pwd)/vcpkg" >> $GITHUB_PATH
+      - name: Build macOS
+        run: ./build-apple.sh
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: osx-c-out
+          path: out

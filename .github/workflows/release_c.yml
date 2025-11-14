@@ -1,0 +1,43 @@
+name: Cross-platform build-release-tag Compiler
+
+on:
+  workflow_call: {}
+permissions:
+  contents: write
+jobs:
+  build-c:
+    uses: kota-codex/ag-compiler/.github/workflows/build_c.yml@main
+    secrets: inherit
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: build-c
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: in
+      - uses: actions/checkout@v4
+        with:
+          repository: kota-codex/ag
+          path: ag
+      - name: Create per-platform zip archives
+        run: |
+          # mv in/ag-module in/lib/sys
+          TAG="${GITHUB_REF_NAME#v.}"   # Strip 'v.' prefix (e.g., "2.33")
+          TAG=$(echo "$TAG" | cut -d. -f1)  # Extract major version (e.g., "2")
+          for PLATFORM in osx linux windows; do
+            for ARCH in arm64 x64; do
+              ZIPNAME="argentum-${ARCH}-${PLATFORM}-${TAG}.zip"
+              (
+                cd "in/${PLATFORM}-comp-out/${ARCH}-${PLATFORM}" &&
+                zip -r "../../../$ZIPNAME" .
+              )
+              #(cd in && zip -ur "../$ZIPNAME" lib/sys)
+              #(cd ag/out &&zip -ur "../../$ZIPNAME" .)
+            done
+          done
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "*.zip"
+          generate_release_notes: true
