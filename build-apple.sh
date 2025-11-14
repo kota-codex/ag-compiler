@@ -34,7 +34,8 @@ for tripleEntry in "${TRIPLES[@]}"; do
     -DAG_OUT_DIR="${OUT_DIR}" \
     -DAG_TRIPLE="${triple}" \
     -DCMAKE_OSX_SYSROOT=macosx \
-    -DCMAKE_OSX_DEPLOYMENT_TARGET="11.0"
+    -DCMAKE_OSX_DEPLOYMENT_TARGET="11.0" \
+    -DVCPKG_BUILD_TYPE=release
 
   cmake --build "${BUILD_DIR}" --parallel "$(sysctl -n hw.logicalcpu)"
 done

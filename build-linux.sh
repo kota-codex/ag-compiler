@@ -26,5 +26,6 @@ cmake -S "." -B "${BUILD_DIR}" -G "${GENERATOR}" \
   -DVCPKG_TARGET_TRIPLET="${triple}" \
   -DCMAKE_BUILD_TYPE=Release \
   -DAG_OUT_DIR="${OUT_DIR}" \
-  -DAG_TRIPLE="${triple}"
+  -DAG_TRIPLE="${triple}" \
+  -DVCPKG_BUILD_TYPE=release
 cmake --build "${BUILD_DIR}" --parallel "$(nproc || echo 4)"

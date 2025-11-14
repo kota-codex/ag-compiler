@@ -21,7 +21,9 @@ cmake -S "." -B "%BUILD_DIR%" -G "%GENERATOR%" ^
     -DVCPKG_TARGET_TRIPLET=%triplet%-static ^
     -DCMAKE_BUILD_TYPE=Release ^
     -DAG_OUT_DIR=%OUT_DIR% ^
-    -DAG_TRIPLE=%triplet%
+    -DAG_TRIPLE=%triplet% ^
+    -DVCPKG_BUILD_TYPE=release ^
+    -DVCPKG_ALLOW_UNSUPPORTED=ON
 
 cmake --build "%BUILD_DIR%" --parallel %CORES%
 
