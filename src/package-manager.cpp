@@ -210,7 +210,6 @@ void Depot::init(string llvm_triplet, bool is_debug) {
     }
     std::string suffix;
     switch (t.getEnvironment()) {
-    case Triple::GNU:     suffix = "-gnu"; break;
     case Triple::Android: os = "android"; break;
     default: break;
     }
