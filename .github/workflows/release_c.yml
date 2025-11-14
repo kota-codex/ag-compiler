@@ -23,8 +23,11 @@ jobs:
       - name: Create per-platform zip archives
         run: |
           # mv in/ag-module in/lib/sys
-          TAG="${GITHUB_REF_NAME#v.}"   # Strip 'v.' prefix (e.g., "2.33")
-          TAG=$(echo "$TAG" | cut -d. -f1)  # Extract major version (e.g., "2")
+          TAG="${GITHUB_REF_NAME#v.}"
+          TAG=$(echo "$TAG" | cut -d. -f1)
+          if [ -z "$TAG" ]; then
+            TAG=$(date +%Y%m%d-%H%M)
+          fi
           for PLATFORM in osx linux windows; do
             for ARCH in arm64 x64; do
               ZIPNAME="argentum-${ARCH}-${PLATFORM}-${TAG}.zip"
