@@ -78,8 +78,9 @@ set_target_properties(agc PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${DST}"
 )
 set(bin_dir "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/bin")
+
 file(GLOB dlls "${bin_dir}/*.dll" "${bin_dir}/*.so")
-foreach(f IN LISTS dlls)
+foreach(f ${dlls})
     add_custom_command(TARGET agc POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${f} ${DST}
     )
