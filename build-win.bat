@@ -23,7 +23,7 @@ cmake -S "." -B "%BUILD_DIR%" -G "%GENERATOR%" ^
     -DAG_OUT_DIR=%OUT_DIR% ^
     -DAG_TRIPLE=%triplet% ^
     -DVCPKG_BUILD_TYPE=release ^
-    -DVCPKG_ALLOW_UNSUPPORTED=ON
+    -DVCPKG_INSTALL_OPTIONS="--allow-unsupported"
 
 cmake --build "%BUILD_DIR%" --parallel %CORES%
 
