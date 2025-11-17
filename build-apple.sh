@@ -23,7 +23,7 @@ for tripleEntry in "${TRIPLES[@]}"; do
   OUT_DIR="../../out"  # relative to build dir
 
   echo "Building ${arch}-osx in ${BUILD_DIR}"
-  cp -f "rel-triple-${arch}.cmake" "${VCPKG_ROOT}triplets/community/${arch}-osx-rel.cmake"
+  cp -f "rel-triple-${arch}.cmake" "${VCPKG_ROOT}/triplets/community/${arch}-osx-rel.cmake"
   mkdir -p "${BUILD_DIR}"
 
   cmake -S "." -B "${BUILD_DIR}" -G "${GENERATOR}" \

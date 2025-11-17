@@ -19,7 +19,7 @@ BUILD_DIR="build/${arch}-linux"
 OUT_DIR="../../out"  # relative to build dir
 echo "Building ${arch}-linux in ${BUILD_DIR} to ${OUT_DIR}"
 mkdir -p "${BUILD_DIR}"
-cp -u "rel-triple-${arch}.cmake" "${VCPKG_ROOT}triplets/community/${arch}-linux-rel.cmake"
+cp -u "rel-triple-${arch}.cmake" "${VCPKG_ROOT}/triplets/community/${arch}-linux-rel.cmake"
 
 cmake -S "." -B "${BUILD_DIR}" -G "${GENERATOR}" \
   -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" \
