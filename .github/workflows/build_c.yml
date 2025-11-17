@@ -9,7 +9,7 @@ env:
   VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg-cache
   VCPKG_ROOT: ${{ github.workspace }}/vcpkg
 jobs:
-  build-windows-x64:
+  build-windows:
     strategy:
       matrix:
         include:
