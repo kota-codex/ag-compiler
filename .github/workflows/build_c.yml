@@ -41,7 +41,7 @@ jobs:
         with:
           arch: ${{ matrix.arch }}
       - name: Build Windows ${{ matrix.arch }}
-        run: .\build-win.bat ${{ matrix.arch }}-windows
+        run: .\build-win.bat ${{ matrix.arch }}
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:

@@ -1,7 +1,7 @@
 @echo on
 setlocal enabledelayedexpansion
 
-set triplet=%1
+set arch=%1
 set GENERATOR=Ninja
 for /F %%p in ('powershell -Command "$((Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors)"') do set CORES=%%p
 
@@ -9,20 +9,20 @@ if exist "update.bat" (
     call update.bat
 )
 
-set BUILD_DIR=build\%triplet%
+set BUILD_DIR=build\%arch%-windows
 set OUT_DIR=..\..\out
-if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
-if not exist "%OUT_DIR%" mkdir "%OUT_DIR%"
+mkdir "%BUILD_DIR%"
+mkdir "%OUT_DIR%"
+copy /y "rel-triple-%arch%.cmake" "%VCPKG_ROOT%\triplets\community\%arch%-windows-rel.cmake"
 
-echo Building %triplet% in %BUILD_DIR%
+echo Building %arch%-windows in %BUILD_DIR%
 
 cmake -S "." -B "%BUILD_DIR%" -G "%GENERATOR%" ^
     -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" ^
-    -DVCPKG_TARGET_TRIPLET=%triplet%-static ^
+    -DVCPKG_TARGET_TRIPLET=%arch%-windows-rel ^
     -DCMAKE_BUILD_TYPE=Release ^
     -DAG_OUT_DIR=%OUT_DIR% ^
-    -DAG_TRIPLE=%triplet% ^
-    -DVCPKG_BUILD_TYPE=release ^
+    -DAG_TRIPLE=%arch%-windows ^
     -DVCPKG_INSTALL_OPTIONS="--allow-unsupported"
 
 cmake --build "%BUILD_DIR%" --parallel %CORES%

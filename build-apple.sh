@@ -9,33 +9,33 @@ if [ -f "update.sh" ]; then
   bash update.sh
 fi
 
-#  ag-triple  osxArc
+#  arch  osxArch
 TRIPLES=(
-  "x64-osx    x86_64"
-  "arm64-osx  arm64"
+  "x64    x86_64"
+  "arm64  arm64"
 )
 
 GENERATOR="Ninja"
 
 for tripleEntry in "${TRIPLES[@]}"; do
-  read -r triple arch <<< "$tripleEntry"
-
-  BUILD_DIR="build/${triple}"
+  read -r arch osxArch <<< "$tripleEntry"
+  BUILD_DIR="build/${arch}-osx"
   OUT_DIR="../../out"  # relative to build dir
-  echo "Building ${triple} in ${BUILD_DIR}"
+
+  echo "Building ${arch}-osx in ${BUILD_DIR}"
+  cp -u "rel-triple-${arch}.cmake" "${VCPKG_ROOT}triplets/community/${arch}-osx-rel.cmake"
   mkdir -p "${BUILD_DIR}"
 
   cmake -S "." -B "${BUILD_DIR}" -G "${GENERATOR}" \
     -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" \
     -DCMAKE_SYSTEM_NAME=Darwin \
-    -DCMAKE_OSX_ARCHITECTURES="${arch}" \
-    -DVCPKG_TARGET_TRIPLET="${triple}" \
+    -DCMAKE_OSX_ARCHITECTURES="${osxArch}" \
+    -DVCPKG_TARGET_TRIPLET="${arch}-osx-rel" \
     -DCMAKE_BUILD_TYPE=Release \
     -DAG_OUT_DIR="${OUT_DIR}" \
-    -DAG_TRIPLE="${triple}" \
+    -DAG_TRIPLE="${arch}-osx" \
     -DCMAKE_OSX_SYSROOT=macosx \
-    -DCMAKE_OSX_DEPLOYMENT_TARGET="11.0" \
-    -DVCPKG_BUILD_TYPE=release
+    -DCMAKE_OSX_DEPLOYMENT_TARGET="11.0"
 
   cmake --build "${BUILD_DIR}" --parallel "$(sysctl -n hw.logicalcpu)"
 done
