@@ -19,7 +19,7 @@ echo Building %arch%-windows in %BUILD_DIR%
 
 cmake -S "." -B "%BUILD_DIR%" -G "%GENERATOR%" ^
     -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" ^
-    -DVCPKG_TARGET_TRIPLET=%arch%-windows-rel ^
+    -DVCPKG_TARGET_TRIPLET=%arch%-windows-static-release ^
     -DCMAKE_BUILD_TYPE=Release ^
     -DAG_OUT_DIR=%OUT_DIR% ^
     -DAG_TRIPLE=%arch%-windows ^

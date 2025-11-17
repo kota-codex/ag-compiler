@@ -19,11 +19,10 @@ BUILD_DIR="build/${arch}-linux"
 OUT_DIR="../../out"  # relative to build dir
 echo "Building ${arch}-linux in ${BUILD_DIR} to ${OUT_DIR}"
 mkdir -p "${BUILD_DIR}"
-cp -u "rel-triple-${arch}.cmake" "${VCPKG_ROOT}/triplets/community/${arch}-linux-rel.cmake"
 
 cmake -S "." -B "${BUILD_DIR}" -G "${GENERATOR}" \
   -DCMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" \
-  -DVCPKG_TARGET_TRIPLET="${arch}-linux-rel" \
+  -DVCPKG_TARGET_TRIPLET="${arch}-linux-release" \
   -DCMAKE_BUILD_TYPE=Release \
   -DAG_OUT_DIR="${OUT_DIR}" \
   -DAG_TRIPLE="${arch}-linux"
