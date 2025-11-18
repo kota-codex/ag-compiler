@@ -16,6 +16,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-c
     steps:
+      - name: Download latest ag-runtime release
+        run: |
+          ASSET_URL=$(curl -s https://api.github.com/repos/kota-codex/ag-runtime/releases/latest \
+            | grep -Po '"browser_download_url": "\K[^"]*ag-runtime-[0-9]+\.zip')
+          echo "Downloading: $ASSET_URL"
+          curl -L "$ASSET_URL" -o ag-runtime.zip
+          mkdir -p lib
+          unzip ag-runtime.zip -d lib/
+          mv ./lib/ag-runtime-* ./lib/sys
       - uses: actions/download-artifact@v4
         with:
           path: in
@@ -25,7 +34,10 @@ jobs:
           path: ag
       - name: Create per-platform zip archives
         run: |
-          # mv in/ag-module in/lib/sys
+          echo "in:"
+          ls in
+          echo "lib/sys:"
+          ls lib/sys
           TAG="${GITHUB_REF_NAME#v.}"
           if [ -z "$TAG" ]; then
             TAG=$(date +%Y%m%d-%H%M)
@@ -34,12 +46,17 @@ jobs:
             for ARCH in arm64 x64; do
               ZIPNAME="argentum-${ARCH}-${PLATFORM}-${TAG}.zip"
               (
-                cd "in/${PLATFORM}-comp-out/${ARCH}-${PLATFORM}" &&
-                zip -r "../../../$ZIPNAME" .
+                  cd "in/bin/"
+                  mv ${ARCH}-${PLATFORM} bin
+                  zip -r "../../$ZIPNAME" bin/
+                  mv bin ${ARCH}-${PLATFORM}
               )
-              #(cd in && zip -ur "../$ZIPNAME" lib/sys)
-              #(cd ag/out &&zip -ur "../../$ZIPNAME" .)
-            done
+              zip -ur "$ZIPNAME" lib/
+              (
+                  cd ag/out/
+                  zip -ur "../../$ZIPNAME" *
+              )
+             done
           done
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
