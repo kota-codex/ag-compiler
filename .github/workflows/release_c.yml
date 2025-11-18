@@ -19,7 +19,7 @@ jobs:
       - name: Download latest ag-runtime release
         run: |
           ASSET_URL=$(curl -s https://api.github.com/repos/kota-codex/ag-runtime/releases/latest \
-            | grep -Po '"browser_download_url": "\K[^"]*ag-runtime-[0-9]+\.zip')
+          | grep -Po '"browser_download_url": "\K[^"]*ag-runtime-[0-9]+\.zip')
           echo "Downloading: $ASSET_URL"
           curl -L "$ASSET_URL" -o ag-runtime.zip
           mkdir -p lib
@@ -34,29 +34,31 @@ jobs:
           path: ag
       - name: Create per-platform zip archives
         run: |
-          echo "in:"
-          ls in
-          echo "lib/sys:"
-          ls lib/sys
-          TAG="${GITHUB_REF_NAME#v.}"
-          if [ -z "$TAG" ]; then
-            TAG=$(date +%Y%m%d-%H%M)
+          if [[ "$GITHUB_REF_NAME" =~ ^v\.?([0-9]+) ]]; then
+              TAG="${BASH_REMATCH[1]}"   # just the digits
+          else
+              TAG="$(date +%Y%m%d-%H%M)"
           fi
+          mkdir -p compilers
+          for d in ./in/*/bin; do
+              cp -r "$d/"* ./compilers/
+          done
           for PLATFORM in osx linux windows; do
-            for ARCH in arm64 x64; do
-              ZIPNAME="argentum-${ARCH}-${PLATFORM}-${TAG}.zip"
-              (
-                  cd "in/bin/"
-                  mv ${ARCH}-${PLATFORM} bin
-                  zip -r "../../$ZIPNAME" bin/
-                  mv bin ${ARCH}-${PLATFORM}
-              )
-              zip -ur "$ZIPNAME" lib/
-              (
-                  cd ag/out/
-                  zip -ur "../../$ZIPNAME" *
-              )
-             done
+              for ARCH in arm64 x64; do
+                  ZIPNAME="argentum-${ARCH}-${PLATFORM}-${TAG}.zip"
+                  (
+                      cd "compilers/"
+                      mv ${ARCH}-${PLATFORM} bin
+                      chmod +x bin/agc || true
+                      zip -r "../$ZIPNAME" bin/
+                      mv bin ${ARCH}-${PLATFORM}
+                  )
+                  zip -ur "$ZIPNAME" lib/
+                  (
+                      cd ag/out/
+                      zip -ur "../../$ZIPNAME" *
+                  )
+              done
           done
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
