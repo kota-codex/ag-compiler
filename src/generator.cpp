@@ -1246,7 +1246,7 @@ struct Generator : ast::ActionScanner {
 			auto main_ret_val = builder->CreateCall(fn_handle_main_thread, {});
 			dispose_consts();
 			builder->CreateRet(main_ret_val);
-		} else if (builder->GetInsertBlock()) { // not dead a code bypassed by break
+		} else if (builder->GetInsertBlock()) { // not a dead code bypassed by break
 			dispose_consts();
 			if (fn_result.data) {
 				builder->CreateRet(fn_result.data);
@@ -1687,7 +1687,10 @@ struct Generator : ast::ActionScanner {
 		};
 		auto callee = cast<ast::TpLambda>(node.callee->type());
 		if (!callee->can_x_break) {
-			dispose_params();
+			if (dom::isa<ast::TpNoRet>(*node.type()))
+				builder->CreateUnreachable();
+			else
+				dispose_params();
 			return;
 		}
 		unordered_set<pin<ast::Block>> x_targets;
