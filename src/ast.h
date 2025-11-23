@@ -435,13 +435,13 @@ struct Ast: dom::DomItem {
 	pin<TpDelegate> tp_delegate(vector<own<Type>>&& params);
 	pin<TpOptional> tp_optional(pin<Type> wrapped);
 	pin<Type> get_wrapped(pin<TpOptional> opt);
-	pin<TpOwn> get_own(pin<AbstractClass> target);
-	pin<TpRef> get_ref(pin<AbstractClass> target);
-	pin<TpShared> get_shared(pin<AbstractClass> target);
-	pin<TpWeak> get_weak(pin<AbstractClass> target);
-	pin<TpFrozenWeak> get_frozen_weak(pin<AbstractClass> target);
-	pin<TpConformRef> get_conform_ref(pin<AbstractClass> target);
-	pin<TpConformWeak> get_conform_weak(pin<AbstractClass> target);
+	pin<TpOwn> tp_own(pin<AbstractClass> target);
+	pin<TpRef> tp_ref(pin<AbstractClass> target);
+	pin<TpShared> tp_shared(pin<AbstractClass> target);
+	pin<TpWeak> tp_weak(pin<AbstractClass> target);
+	pin<TpFrozenWeak> tp_frozen_weak(pin<AbstractClass> target);
+	pin<TpConformRef> tp_conform_ref(pin<AbstractClass> target);
+	pin<TpConformWeak> tp_conform_weak(pin<AbstractClass> target);
 	pin<AbstractClass> extract_class(pin<Type> pointer); // extracts class from pointer types
 	pin<Type> convert_maybe_optional(pin<Type> src, std::function<pin<Type>(pin<Type>)> converter);  // for non-opt type calls converter, for opt - converts inner type and repack to same level opt
 	pin<ClassInstance> get_class_instance(vector<weak<AbstractClass>>&& params);
@@ -786,6 +786,7 @@ struct FreezeOp : UnaryOp { // converts TpClass/TpRef to TpShared.
 };
 
 struct ActionMatcher {
+	virtual ~ActionMatcher() {}
 	virtual void on_unmatched(Action& node);
 	virtual void on_bin_op(BinaryOp& node);
 	virtual void on_un_op(UnaryOp& node);

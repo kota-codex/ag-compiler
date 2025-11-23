@@ -718,7 +718,7 @@ pin<Type> Ast::get_wrapped(pin<TpOptional> opt) {
 		: optional_types_[opt->wrapped][size_t(opt->depth) - 1];
 }
 
-pin<TpOwn> Ast::get_own(pin<AbstractClass> target) {
+pin<TpOwn> Ast::tp_own(pin<AbstractClass> target) {
 	auto& r = owns[target];
 	if (!r) {
 		r = new TpOwn;
@@ -727,7 +727,7 @@ pin<TpOwn> Ast::get_own(pin<AbstractClass> target) {
 	return r;
 }
 
-pin<TpRef> Ast::get_ref(pin<AbstractClass> target) {
+pin<TpRef> Ast::tp_ref(pin<AbstractClass> target) {
 	auto& r = refs[target];
 	if (!r) {
 		r = new TpRef;
@@ -736,7 +736,7 @@ pin<TpRef> Ast::get_ref(pin<AbstractClass> target) {
 	return r;
 }
 
-pin<TpShared> Ast::get_shared(pin<AbstractClass> target) {
+pin<TpShared> Ast::tp_shared(pin<AbstractClass> target) {
 	auto& r = shareds[target];
 	if (!r) {
 		r = new TpShared;
@@ -745,7 +745,7 @@ pin<TpShared> Ast::get_shared(pin<AbstractClass> target) {
 	return r;
 }
 
-pin<TpWeak> Ast::get_weak(pin<AbstractClass> target) {
+pin<TpWeak> Ast::tp_weak(pin<AbstractClass> target) {
 	auto& w = weaks[target];
 	if (!w) {
 		w = new TpWeak;
@@ -754,7 +754,7 @@ pin<TpWeak> Ast::get_weak(pin<AbstractClass> target) {
 	return w;
 }
 
-pin<TpFrozenWeak> Ast::get_frozen_weak(pin<AbstractClass> target) {
+pin<TpFrozenWeak> Ast::tp_frozen_weak(pin<AbstractClass> target) {
 	auto& w = frozen_weaks[target];
 	if (!w) {
 		w = new TpFrozenWeak;
@@ -763,7 +763,7 @@ pin<TpFrozenWeak> Ast::get_frozen_weak(pin<AbstractClass> target) {
 	return w;
 }
 
-pin<TpConformRef> Ast::get_conform_ref(pin<AbstractClass> target) {
+pin<TpConformRef> Ast::tp_conform_ref(pin<AbstractClass> target) {
 	auto& w = conform_refs[target];
 	if (!w) {
 		w = new TpConformRef;
@@ -772,7 +772,7 @@ pin<TpConformRef> Ast::get_conform_ref(pin<AbstractClass> target) {
 	return w;
 }
 
-pin<TpConformWeak> Ast::get_conform_weak(pin<AbstractClass> target) {
+pin<TpConformWeak> Ast::tp_conform_weak(pin<AbstractClass> target) {
 	auto& w = conform_weaks[target];
 	if (!w) {
 		w = new TpConformWeak;

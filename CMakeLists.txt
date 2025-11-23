@@ -65,6 +65,9 @@ add_executable(agc
 )
 target_include_directories(agc PRIVATE ${LLVM_INCLUDE_DIRS})
 target_include_directories(agc  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_compile_options(agc PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wno-unqualified-std-cast-call>
+)
 
 target_link_libraries(agc PUBLIC ag_ffi_header)
 

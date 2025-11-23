@@ -144,7 +144,7 @@ struct Formatter {
 		flags |= SAVED;
 		string id =
 			name ? "." + std::to_string(name) :
-			(flags & (HAS_MULTIPLE_OWNS || HAS_WEAK)) ? "._" + std::to_string(flags >> NUMERATOR_OFFSET) :
+			(flags & (HAS_MULTIPLE_OWNS | HAS_WEAK)) ? "._" + std::to_string(flags >> NUMERATOR_OFFSET) :
 			string();
 		string annotation = ptr->get_annotation();
 		if (!annotation.empty())
