@@ -50,7 +50,7 @@ static void write_file(const string& name, const string& content) {
     }
 }
 
-//#define AK_DBG
+// #define AK_DBG
 #ifdef AK_DBG
 int ak_main(int argc, const char* argv[]);
 int main(int argc, char* argv[]) {
@@ -59,9 +59,9 @@ int main(int argc, char* argv[]) {
         "-g",
         "-src", "C:\\Users\\ak\\cpp\\ag\\out\\examples",
         "-src", "C:\\Users\\ak\\cpp\\ag\\out\\bin\\..\\lib::https://aglang.org/wp-json/repo/v1",
-        "-start", "sqliteDemo",
+        "-start", "test",
         "-O0",
-        "-o", "sqliteDemo",
+        "-o", "test",
         "-L", "lnk",
         "-D", "dep"
     };

@@ -734,7 +734,7 @@ struct Typer : ast::ActionMatcher {
 				[&] { node.error("field name is ambiguous, use cast"); }))
 				node.error("class ", base_cls->get_name(), " doesn't have field/method ", ast::LongName{node.field_name, node.field_module});
 		}
-		if (isa<TpShared>(*node.base->type()) && isa<TpConformRef>(*node.base->type()))
+		if (isa<TpShared>(*node.base->type()) || isa<TpConformRef>(*node.base->type()))
 			node.error("Cannot assign to a shared/conform object field ", ast::LongName{ node.field_name, node.field_module });
 		node.type_ = remove_member_type_params(
 			base_cls,
