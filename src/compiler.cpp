@@ -61,6 +61,8 @@ int main(int argc, char* argv[]) {
         "-src", "C:\\Users\\ak\\cpp\\ag\\out\\bin\\..\\lib::https://aglang.org/wp-json/repo/v1",
         "-start", "test",
         "-O0",
+//        "-emit-llvm",
+//        "-S",
         "-o", "test",
         "-L", "lnk",
         "-D", "dep"

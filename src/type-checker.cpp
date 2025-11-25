@@ -588,6 +588,14 @@ struct Typer : ast::ActionMatcher {
 			node->error("Expected pointer to class, not ", node->type().pinned());
 		return cls;
 	}
+	void check_if_protected(ast::Node& node, string& field_name, pin<ast::AbstractClass> accessed_cls) {
+		if (field_name[0] != '_')
+			return;
+		if (!this_class)
+			node.error("cannot access a protected member of ", accessed_cls->get_name(), " from outside the class");
+		if (!is_compatible(accessed_cls, this_class))
+			node.error("cannot access a protected member of ", accessed_cls->get_name(), " from class ", this_class->get_name());
+	}
 	void on_get_field(ast::GetField& node) override {
 		if (auto as_enum = strict_cast<ast::ConstEnumTag>(node.base)) {
 			if (as_enum->value)
@@ -612,6 +620,7 @@ struct Typer : ast::ActionMatcher {
 		}
 		auto base_cls = class_from_action(node.base);
 		if (!node.field) {
+			check_if_protected(node, node.field_name, base_cls);
 			if (!base_cls->get_implementation()->handle_member(node, ast::LongName{ node.field_name, node.field_module },
 				[&](auto field) { node.field = field; },
 				[&](auto method) {
@@ -728,6 +737,7 @@ struct Typer : ast::ActionMatcher {
 	void resolve_set_field(ast::SetField& node) {
 		auto base_cls = class_from_action(node.base);
 		if (!node.field) {
+			check_if_protected(node, node.field_name, base_cls);
 			if (!base_cls->get_implementation()->handle_member(node, ast::LongName{node.field_name, node.field_module},
 				[&](auto field) { node.field = field; },
 				[&](auto method) { node.error("Cannot assign to method"); },
@@ -1085,6 +1095,7 @@ struct Typer : ast::ActionMatcher {
 				for (auto& m : b.second)
 					type_fn(m);
 		}
+		this_class = nullptr;
 		for (auto& m : ast->modules) {
 			current_module = m.second;
 			for (auto& ct : m.second->constants) {
@@ -1119,6 +1130,7 @@ struct Typer : ast::ActionMatcher {
 				for (auto& m : b.second)
 					process_method(m);
 		}
+		this_class = nullptr;
 		for (auto& m : ast->modules) {
 			current_module = m.second;
 			for (auto& fn : m.second->functions) {
