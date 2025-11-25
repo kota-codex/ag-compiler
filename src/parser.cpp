@@ -113,8 +113,12 @@ struct Parser {
 		auto id = expect_id(message);
 		if (!match("_"))
 			return { id, def_module };
-		if (auto it = module->direct_imports.find(id); it != module->direct_imports.end())
-			return { expect_id(message), it->second };
+		if (auto it = module->direct_imports.find(id); it != module->direct_imports.end()) {
+			ast::LongName r{ expect_id(message), it->second };
+			if (r.name[0] == '_')
+				error("name ", r.name, " is private in module ", r.module);
+			return r;
+		}
 		if (id == module->name)
 			error("names of the current module should not be prefixed with a module name");
 		else
@@ -205,6 +209,8 @@ struct Parser {
 					if (match("=")) {
 						their_id = expect_id("name in package");
 					}
+					if (their_id[0] == '_')
+						error("cannot import module-private name");
 					if (auto it = used_module->functions.find(their_id); it != used_module->functions.end())
 						module->aliases.insert({ my_id, it->second });
 					else if (auto it = used_module->classes.find(their_id); it != used_module->classes.end())
@@ -362,8 +368,7 @@ struct Parser {
 			body.push_back(parse_statement());
 		} while (match(";"));
 	}
-	pin<ast::Action> mk_get(const char* kind) {
-		auto n = expect_long_name(kind, nullptr);
+	pin<ast::Action> mk_get(ast::LongName n) {
 		if (!n.module && current_class) {
 			for (auto& p : current_class->params) {
 				if (n.name == p->name) {
@@ -914,12 +919,6 @@ struct Parser {
 			return make<ast::ToDoubleOp>()->fill(parse_expression_in_parethesis());
 		if (match("loop")) 
 			return make<ast::Loop>()->fill(parse_expression());
-		if (match("_")) {
-			auto r = make<ast::Get>();
-			r->var_name = "_";
-			underscore_accessed = true;
-			return r;
-		}
 		if (match_ns("'")) {
 			auto r = make<ast::ConstInt32>();
 			auto prev = cur;
@@ -958,8 +957,12 @@ struct Parser {
 			return StringParser(this, "${").handle_single_line();
 		if (match_ns("\""))
 			return StringParser(this, "{").handle_maybe_multiline();
-		if (is_id_head(*cur))
-			return mk_get("name");
+		if (is_id_head(*cur)) {
+			auto n = expect_long_name("name", nullptr);
+			if (n.name == "_")
+				underscore_accessed = true;
+			return mk_get(n);
+		}
 		error("syntax error");
 	}
 	struct StringParser {
@@ -1138,10 +1141,10 @@ struct Parser {
 			return nullopt;
 		set_maybe_match_pos();
 		string result;
-		while (is_id_body(*cur)) {
+		do {
 			result += *cur++;
 			++pos;
-		}
+		} while (is_id_body(*cur));
 		match_ws();
 		return result;
 	}
@@ -1252,10 +1255,14 @@ struct Parser {
 		}
 	}
 
-	static bool is_id_head(char c) {
+	static bool is_alpha(char c) {
 		return
 			(c >= 'a' && c <= 'z') ||
 			(c >= 'A' && c <= 'Z');
+	};
+
+	static bool is_id_head(char c) {
+		return is_alpha(c) || c == '_';
 	};
 
 	static bool is_num(char c) {
@@ -1263,7 +1270,7 @@ struct Parser {
 	};
 
 	static bool is_id_body(char c) {
-		return is_id_head(c) || is_num(c);
+		return is_alpha(c) || is_num(c);
 	};
 
 	static int get_digit(char c, int radix) {
