@@ -240,7 +240,8 @@ struct Class : AbstractClass {
 
 	template<typename F, typename M, typename A>
 	bool handle_member(Node& node, const LongName& name, F on_field, M on_method, A on_anbiguous) {
-		if (auto m = dom::peek(this_names, name)) {
+		if (auto mi = this_names.find(name); mi != this_names.end()) {
+			auto& m = mi->second;
 			if (!m)
 				on_anbiguous();
 			else if (auto as_field = dom::strict_cast<ast::Field>(m))
