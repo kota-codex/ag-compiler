@@ -1010,11 +1010,15 @@ struct Generator : ast::ActionScanner {
 		return ast->tp_optional(fn_result);
 	}
 
-	void compile_fn_body(ast::MkLambda& node, string name,
+	void compile_fn_body(ast::MkLambda& node, string name, llvm::Function* fn,
 		llvm::Type* closure_struct = nullptr,
 		bool handle_consts = false,
 		bool handle_threads = false)
 	{
+		auto prev_ll_fn = current_ll_fn;
+		auto prev_fn = current_function;
+		current_ll_fn = fn;
+		current_function = &node;
 		vector<BreakTrace> prev_breaks = move(active_breaks);
 		active_breaks.clear();
 		unordered_map<weak<ast::Var>, llvm::Value*> outer_locals;
@@ -1025,8 +1029,6 @@ struct Generator : ast::ActionScanner {
 		auto prev_builder = builder;
 		llvm::IRBuilder fn_bulder(llvm::BasicBlock::Create(*context, "", current_ll_fn));
 		this->builder = &fn_bulder;
-		auto prev_fn = current_function;
-		current_function = &node;
 		llvm::DIScope* prev_di_scope = current_di_scope;
 		if (node.module) {
 			if (auto di_file = di_files.find(node.module->name); di_file != di_files.end()) {
@@ -1280,6 +1282,7 @@ struct Generator : ast::ActionScanner {
 		active_breaks = move(prev_breaks);
 		current_di_scope = prev_di_scope;
 		current_function = prev_fn;
+		current_ll_fn = prev_ll_fn;
 		current_capture_di_type = prev_capture_di_type;
 		builder = prev_builder;
 		if (!captures.empty() && captures.back().first == (int) node.lexical_depth)
@@ -1293,20 +1296,18 @@ struct Generator : ast::ActionScanner {
 	llvm::Function* compile_function(ast::MkLambda& node, string name, llvm::Type* closure_ptr_type, bool is_external) {
 		if (auto seen = compiled_functions[&node])
 			return seen;
-		llvm::Function* prev = current_ll_fn;
-		current_ll_fn = llvm::Function::Create(
+		llvm::Function* fn = llvm::Function::Create(
 			lambda_to_llvm_fn(node, node.type()),
 			is_external
 				? llvm::Function::ExternalLinkage
 				: llvm::Function::InternalLinkage,
 			name,
 			module.get());
+		compiled_functions[&node] = fn;
 		if (!is_external) {
-			compile_fn_body(node, name, closure_ptr_type);
+			compile_fn_body(node, name, fn, closure_ptr_type);
 		}
-		swap(prev, current_ll_fn);
-		compiled_functions[&node] = prev;
-		return prev;
+		return fn;
 	}
 
 	void on_mk_lambda(ast::MkLambda& node) override {
@@ -1523,10 +1524,7 @@ struct Generator : ast::ActionScanner {
 			ast::format_str("ag_dl_", node.module->name, "_", node.name),
 			module.get());
 		execute_in_global_scope.push_back([&, dl_fn] {
-			auto prev_fn = current_ll_fn;
-			current_ll_fn = dl_fn;
-			compile_fn_body(node, ast::format_str("ag_dl_", node.module->name, "_", node.name));
-			current_ll_fn = prev_fn;
+			compile_fn_body(node, ast::format_str("ag_dl_", node.module->name, "_", node.name), dl_fn);
 		});
 		auto base = compile(node.base);
 		llvm::Value* base_weak_val = nullptr;
@@ -1586,6 +1584,18 @@ struct Generator : ast::ActionScanner {
 				).data;
 			}
 			params.front() = cast_to(receiver, ptr_type);
+/*			if (auto calle_as_cast = dom::strict_cast<ast::CastOp>(calle_as_method->base)) {
+				if (auto calle_as_this = dom::strict_cast<ast::Get>(calle_as_cast->p[0])) {
+					if (calle_as_this->var_name == "this") {
+						// this~Class.method
+						calle_as_method->method;
+						result->data = builder->CreateCall(
+							llvm::FunctionCallee(m_info.type, entry_point),
+							move(params));
+					}
+				}
+			}
+*/
 			if (method->cls->is_interface) {
 				auto entry_point = builder->CreateCall(
 					llvm::FunctionCallee(
@@ -3516,8 +3526,7 @@ struct Generator : ast::ActionScanner {
 		for (auto& m : ast->modules) {
 			for (auto& fn : m.second->functions) {
 				if (fn.second->used && !fn.second->is_platform) {
-					current_ll_fn = functions.at(fn.second);
-					compile_fn_body(*fn.second, ast::format_str("ag_fn_", m.first, "_", fn.first));
+					compile_fn_body(*fn.second, ast::format_str("ag_fn_", m.first, "_", fn.first), functions.at(fn.second));
 				}
 			}
 		}
@@ -3533,10 +3542,10 @@ struct Generator : ast::ActionScanner {
 						ast::format_str("ag_test_", m.first, "_", test.first),
 						module.get());
 					functions.insert({ test.second, fn });
-					current_ll_fn = fn;
 					compile_fn_body(
 						*test.second,
 						ast::format_str("ag_test_", m.first, "_", test.first),
+						fn,
 						nullptr, // closure type
 						false,   // handle consts
 						true);   // handle threads
@@ -3544,11 +3553,11 @@ struct Generator : ast::ActionScanner {
 			}
 		}
 		// Main
-		current_ll_fn = llvm::Function::Create(
-			llvm::FunctionType::get(int_type, {}, false),
-			llvm::Function::ExternalLinkage,
-			entry_point_name, module.get());
 		compile_fn_body(*ast->starting_module->entry_point, entry_point_name,
+			llvm::Function::Create(
+				llvm::FunctionType::get(int_type, {}, false),
+				llvm::Function::ExternalLinkage,
+				entry_point_name, module.get()),
 			nullptr, // closure type
 			true, // handle consts
 			true); // handle threads
