@@ -1585,6 +1585,8 @@ struct Generator : ast::ActionScanner {
 			}
 			params.front() = cast_to(receiver, ptr_type);
 			if (calle_as_method->is_base_cast()) {
+				if (ast->extract_class(calle_as_method->base->type())->get_implementation()->is_interface)
+					node.error("Cannot call interface method with cast-to-base syntax");
 				result->data = builder->CreateCall(
 					llvm::FunctionCallee(m_info.type, compiled_functions[calle_as_method->method]),
 					move(params));
