@@ -580,6 +580,7 @@ struct MakeDelegate : Action {
 	weak<Method> method;
 	own<Action> base;
 	void match(ActionMatcher& matcher) override;
+	bool is_base_cast();
 	DECLARE_DOM_CLASS(MakeDelegate);
 };
 

@@ -1584,19 +1584,11 @@ struct Generator : ast::ActionScanner {
 				).data;
 			}
 			params.front() = cast_to(receiver, ptr_type);
-/*			if (auto calle_as_cast = dom::strict_cast<ast::CastOp>(calle_as_method->base)) {
-				if (auto calle_as_this = dom::strict_cast<ast::Get>(calle_as_cast->p[0])) {
-					if (calle_as_this->var_name == "this") {
-						// this~Class.method
-						calle_as_method->method;
-						result->data = builder->CreateCall(
-							llvm::FunctionCallee(m_info.type, entry_point),
-							move(params));
-					}
-				}
-			}
-*/
-			if (method->cls->is_interface) {
+			if (calle_as_method->is_base_cast()) {
+				result->data = builder->CreateCall(
+					llvm::FunctionCallee(m_info.type, compiled_functions[calle_as_method->method]),
+					move(params));
+			} else if (method->cls->is_interface) {
 				auto entry_point = builder->CreateCall(
 					llvm::FunctionCallee(
 						dispatcher_fn_type,

@@ -529,6 +529,15 @@ void TpConformRef::match(TypeMatcher& matcher) { matcher.on_conform_ref(*this); 
 void TpConformWeak::match(TypeMatcher& matcher) { matcher.on_conform_weak(*this); }
 void TpEnum::match(TypeMatcher& matcher) { matcher.on_enum(*this); }
 
+bool MakeDelegate::is_base_cast() {
+	if (auto calle_as_cast = dom::strict_cast<ast::CastOp>(base)) {
+		if (auto calle_as_this = dom::strict_cast<ast::Get>(calle_as_cast->p[0])) {
+			return calle_as_this->var_name == "this";
+		}
+	}
+	return false;
+}
+
 pin<Field> Ast::mk_field (string name, pin<Action> initializer) {
 	auto f = pin<Field>::make();
 	f->name = move(name);
