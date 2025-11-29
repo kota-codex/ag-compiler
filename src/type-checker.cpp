@@ -47,6 +47,7 @@ struct Typer : ast::ActionMatcher {
 	pin<ast::Class> this_class;
 	weak<ast::Var> current_underscore_var;
 	pin<ast::Module> current_module;
+	pin<ast::Function> current_function;
 
 	Typer(ltm::pin<ast::Ast> ast)
 		: ast(ast)
@@ -591,10 +592,17 @@ struct Typer : ast::ActionMatcher {
 	void check_if_protected(ast::Node& node, string& field_name, pin<ast::AbstractClass> accessed_cls) {
 		if (field_name[0] != '_')
 			return;
+		if (this_class && is_compatible(accessed_cls, this_class))
+			return;
+		if (current_function && current_function->module == accessed_cls->module) {
+			if (current_function->name == "afterCopy" + accessed_cls->get_implementation()->name ||
+				current_function->name == "dispose" + accessed_cls->get_implementation()->name)
+				return;
+		}
 		if (!this_class)
-			node.error("cannot access a protected member of ", accessed_cls->get_name(), " from outside the class");
-		if (!is_compatible(accessed_cls, this_class))
-			node.error("cannot access a protected member of ", accessed_cls->get_name(), " from class ", this_class->get_name());
+			node.error("cannot access a protected member ", field_name, " of ", accessed_cls->get_name(), " from outside the class");
+		else
+			node.error("cannot access a protected member ", field_name, " of ", accessed_cls->get_name(), " from class ", this_class->get_name());
 	}
 	void on_get_field(ast::GetField& node) override {
 		if (auto as_enum = strict_cast<ast::ConstEnumTag>(node.base)) {
@@ -874,21 +882,25 @@ struct Typer : ast::ActionMatcher {
 	}
 
 	void on_immediate_delegate(ast::ImmediateDelegate& node) override {
+		auto prev_fn = current_function;
+		current_function = &node;
 		if (!node.base) {
 			type_fn(&node);
-			return;
 		}
-		auto cls = class_from_action(node.base, true); // include week
-		resolve_immediate_delegate(ast, node, cls->get_implementation());
-		strict_cast<ast::MkInstance>(node.names[0]->initializer)->cls = cls;
-		type_fn(&node);
-		handle_block_body(node);
-		expect_type(
-			nullptr,
-			&node,
-			find_block_ret_type(node, node.type_expression->type()),
-			node.type_expression->type(),
-			[] { return "checking immediate delegate result against declared type"; });
+		else {
+			auto cls = class_from_action(node.base, true); // include week
+			resolve_immediate_delegate(ast, node, cls->get_implementation());
+			strict_cast<ast::MkInstance>(node.names[0]->initializer)->cls = cls;
+			type_fn(&node);
+			handle_block_body(node);
+			expect_type(
+				nullptr,
+				&node,
+				find_block_ret_type(node, node.type_expression->type()),
+				node.type_expression->type(),
+				[] { return "checking immediate delegate result against declared type"; });
+		}
+		current_function = prev_fn;
 	}
 
 	own<ast::Action>& find_type(own<ast::Action>& node) {
@@ -1061,6 +1073,8 @@ struct Typer : ast::ActionMatcher {
 	}
 
 	void process_method(own<ast::Method>& m) {
+		auto prev_fn = current_function;
+		current_function = m;
 		pin<ast::Module> prevm = current_module;
 		current_module = m->module;
 		m->names[0]->type = find_type(m->names[0]->initializer)->type();
@@ -1075,15 +1089,19 @@ struct Typer : ast::ActionMatcher {
 		if (m->base != m)
 			expect_type(m, m->type(), m->base->type(), [] { return "checking method type against overridden"; });
 		current_module = prevm;
+		current_function = prev_fn;
 	}
 
 	void process_fn_body(own<ast::Function>& m) {
+		auto prev_fn = current_function;
+		current_function = m;
 		pin<ast::Module> prevm = current_module;
 		current_module = m->module;
 		handle_block_body(*m);
 		if (!m->is_platform)
 			check_fn_result(m);
 		current_module = prevm;
+		current_function = prev_fn;
 	}
 
 	void process() {
