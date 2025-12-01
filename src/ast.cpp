@@ -75,6 +75,7 @@ own<TypeWithFills> CopyOp::dom_type_;
 own<TypeWithFills> MkWeakOp::dom_type_;
 own<TypeWithFills> DerefWeakOp::dom_type_;
 
+own<TypeWithFills> TpHandle::dom_type_;
 own<TypeWithFills> TpEnum::dom_type_;
 own<TypeWithFills> TpInt32::dom_type_;
 own<TypeWithFills> TpInt64::dom_type_;
@@ -310,6 +311,7 @@ void initialize() {
 		->field("target", pin<CField<&TpOwn::target>>::make(weak_type));
 	TpInt32::dom_type_ = new CppClassType<TpInt32>(cpp_dom, { "m0", "Type", "Int32" });
 	TpInt64::dom_type_ = new CppClassType<TpInt64>(cpp_dom, { "m0", "Type", "Int64" });
+	TpHandle::dom_type_ = new CppClassType<TpHandle>(cpp_dom, { "m0", "Type", "Handle" });
 	TpFloat::dom_type_ = new CppClassType<TpDouble>(cpp_dom, { "m0", "Type", "Float" });
 	TpDouble::dom_type_ = new CppClassType<TpDouble>(cpp_dom, { "m0", "Type", "Double" });
 	TpFunction::dom_type_ = (new CppClassType<TpFunction>(cpp_dom, { "m0", "Type", "Function" }))
@@ -509,6 +511,7 @@ void ActionScanner::on_set_field(SetField& node) {
 }
 void ActionScanner::on_splice_field(SpliceField& node) { on_set_field(node); }
 
+void TpHandle::match(TypeMatcher& matcher) { matcher.on_handle(*this); }
 void TpInt32::match(TypeMatcher& matcher) { matcher.on_int32(*this); }
 void TpInt64::match(TypeMatcher& matcher) { matcher.on_int64(*this); }
 void TpFloat::match(TypeMatcher& matcher) { matcher.on_float(*this); }
@@ -631,6 +634,10 @@ Ast::Ast()
 	register_runtime_content(*this);
 }
 
+pin<TpHandle> Ast::tp_handle() {
+	static auto r = own<TpHandle>::make();
+	return r;
+}
 pin<TpInt32> Ast::tp_int32() {
 	static auto r = own<TpInt32>::make();
 	return r;
@@ -957,6 +964,7 @@ std::ostream& operator<< (std::ostream& dst, const ltm::pin<ast::Type>& t) {
 	struct TypePrinter : ast::TypeMatcher {
 		std::ostream& dst;
 		TypePrinter(std::ostream& dst) : dst(dst) {}
+		void on_handle(ast::TpHandle& type) override { dst << "sys_handle"; }
 		void on_int32(ast::TpInt32& type) override { dst << "short"; }
 		void on_int64(ast::TpInt64& type) override { dst << "int"; }
 		void on_float(ast::TpFloat& type) override { dst << "float"; }

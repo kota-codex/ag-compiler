@@ -942,6 +942,7 @@ struct Generator : ast::ActionScanner {
 					? gen->di_obj_ptr
 					: gen->classes.at(cls).di_ptr;
 			}
+			void on_handle(ast::TpHandle& type) override { result = gen->di_int; }
 			void on_int32(ast::TpInt32& type) override { result = gen->di_int32; }
 			void on_int64(ast::TpInt64& type) override { result = gen->di_int; }
 			void on_float(ast::TpFloat& type) override { result = gen->di_float; }
@@ -1579,8 +1580,8 @@ struct Generator : ast::ActionScanner {
 				receiver = reg_disposable(
 					calle_as_method->base,
 					comp_to_persistent(
-					calle_as_method->base,
-					false) // perist_mutable_locals
+						calle_as_method->base,
+						false) // perist_mutable_locals
 				).data;
 			}
 			params.front() = cast_to(receiver, ptr_type);
@@ -1851,6 +1852,7 @@ struct Generator : ast::ActionScanner {
 							second,
 							{ 1 }));
 				}
+				void on_handle(ast::TpHandle& type) override { handle_64_bit(type); }
 				void on_int64(ast::TpInt64& type) override { handle_64_bit(type); }
 				void on_int32(ast::TpInt32& type) override { handle_32_bit(type); }
 				void on_float(ast::TpFloat& type) override { handle_32_bit(type); }
@@ -1954,6 +1956,7 @@ struct Generator : ast::ActionScanner {
 						gen.builder->CreateZExt(value, gen.int_type)
 					});
 				}
+				void on_handle(ast::TpHandle& type) override { handle_64_bit(); }
 				void on_int64(ast::TpInt64& type) override { handle_64_bit(); }
 				void on_enum(ast::TpEnum& type) override { handle_64_bit(); }
 				void on_float(ast::TpFloat& type) override {
@@ -2295,6 +2298,7 @@ struct Generator : ast::ActionScanner {
 					gen.cast_to(rhs, gen.ptr_type) });
 			}
 			Comparer(llvm::Value* lhs, llvm::Value* rhs, Generator& gen) : lhs(lhs), rhs(rhs), gen(gen) {}
+			void on_handle(ast::TpHandle& type) override { compare_scalar(); }
 			void on_int32(ast::TpInt32& type) override { compare_scalar(); }
 			void on_int64(ast::TpInt64& type) override { compare_scalar(); }
 			void on_enum(ast::TpEnum& type) override { compare_scalar(); }
@@ -2309,6 +2313,7 @@ struct Generator : ast::ActionScanner {
 				struct OptComparer : ast::TypeMatcher {
 					Comparer& c;
 					OptComparer(Comparer& c) : c(c) {}
+					void on_handle(ast::TpHandle& type) override { c.compare_scalar(); }
 					void on_int32(ast::TpInt32& type) override { c.compare_scalar(); }
 					void on_int64(ast::TpInt64& type) override { c.compare_pair(); }
 					void on_enum(ast::TpEnum& type) override { c.compare_scalar(); }
@@ -2436,6 +2441,10 @@ struct Generator : ast::ActionScanner {
 					? val
 					: gen->builder->CreateZExt(val, gen->int_type);
 			}
+			void on_handle(ast::TpHandle& type) override {
+				// since the handle is a 64-bit pointer in the int form
+				// and we use 0...255 as null for all pointers, it's a no-op conversion
+			}
 			void on_enum(ast::TpEnum& type) override {
 				// val is already bit and type compatible
 			}
@@ -2534,6 +2543,7 @@ struct Generator : ast::ActionScanner {
 			void on_conform_weak(ast::TpConformWeak& type) override { val = llvm::ConstantInt::get(gen->tp_int_ptr, depth); }
 			void on_no_ret(ast::TpNoRet& type) override { assert(false); }
 			void on_enum(ast::TpEnum& type) override { val = llvm::ConstantInt::get(gen->int_type, depth); }
+			void on_handle(ast::TpHandle& type) override { val = llvm::ConstantInt::get(gen->int_type, depth); }
 		};
 		NoneMaker none_maker(this, type->depth);
 		type->wrapped->match(none_maker);
@@ -2608,6 +2618,11 @@ struct Generator : ast::ActionScanner {
 			void on_conform_weak(ast::TpConformWeak& type) override { handle_ptr(); }
 			void on_no_ret(ast::TpNoRet& type) override { assert(false); }
 			void on_enum(ast::TpEnum& type) override {
+				val = gen->builder->CreateICmpNE(
+					val,
+					llvm::ConstantInt::get(gen->int_type, depth));
+			}
+			void on_handle(ast::TpHandle& type) override {
 				val = gen->builder->CreateICmpNE(
 					val,
 					llvm::ConstantInt::get(gen->int_type, depth));
@@ -2687,6 +2702,7 @@ struct Generator : ast::ActionScanner {
 			void on_conform_weak(ast::TpConformWeak& type) override { handle_ptr(type); }
 			void on_no_ret(ast::TpNoRet& type) override { assert(false); }
 			void on_enum(ast::TpEnum& type) override {} // no-op
+			void on_handle(ast::TpHandle& type) override {} // no-op
 		};
 		ValMaker val_maker(val, this, type->depth);
 		type->wrapped->match(val_maker);
@@ -2970,6 +2986,7 @@ struct Generator : ast::ActionScanner {
 					void on_conform_weak(ast::TpConformWeak& type) override { result = gen->tp_int_ptr; }
 					void on_no_ret(ast::TpNoRet& type) override { result = gen->void_type; }
 					void on_enum(ast::TpEnum& type) override { result = gen->int_type; }
+					void on_handle(ast::TpHandle& type) override { result = gen->int_type; }
 				};
 				OptionalMatcher matcher(gen, type.depth);
 				type.wrapped->match(matcher);
@@ -2984,6 +3001,7 @@ struct Generator : ast::ActionScanner {
 			void on_conform_weak(ast::TpConformWeak& type) override { result = gen->ptr_type; }
 			void on_no_ret(ast::TpNoRet& type) override { result = gen->void_type; }
 			void on_enum(ast::TpEnum& type) override { result = gen->int_type; }
+			void on_handle(ast::TpHandle& type) override { result = gen->int_type; }
 		} matcher(this);
 		t.match(matcher);
 		return matcher.result;

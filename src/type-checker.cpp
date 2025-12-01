@@ -349,6 +349,7 @@ struct Typer : ast::ActionMatcher {
 			ast::Node& node;
 			ast::Ast& ast;
 			TypeNameGenerator(ast::Node& node, ast::Ast& ast) :node(node), ast(ast) {}
+			void on_handle(ast::TpHandle& type) override { error(type); }
 			void on_int32(TpInt32& type) override { result = "Int32"; }
 			void on_int64(TpInt64& type) override { result = "Int"; }
 			void on_float(TpFloat& type) override { result = "Float"; }
@@ -713,6 +714,7 @@ struct Typer : ast::ActionMatcher {
 					r.push_back(remove_params(p, ast, ctx));
 				return r;
 			}
+			void on_handle(ast::TpHandle& type) override { r = &type; }
 			void on_int32(TpInt32& type) override { r = &type; }
 			void on_int64(TpInt64& type) override { r = &type; }
 			void on_float(TpFloat& type) override { r = &type; }

@@ -112,6 +112,10 @@ struct TpInt32 : Type {
 	void match(TypeMatcher& matcher) override;
 	DECLARE_DOM_CLASS(TpInt32);
 };
+struct TpHandle : Type {
+	void match(TypeMatcher& matcher) override;
+	DECLARE_DOM_CLASS(TpHandle);
+};
 struct TpInt64 : Type {
 	void match(TypeMatcher& matcher) override;
 	DECLARE_DOM_CLASS(TpInt64);
@@ -312,6 +316,7 @@ struct TpConformWeak : TpOwn {
 
 struct TypeMatcher {
 	virtual ~TypeMatcher() = default;
+	virtual void on_handle(TpHandle& type) = 0;
 	virtual void on_int32(TpInt32& type) = 0;
 	virtual void on_int64(TpInt64& type) = 0;
 	virtual void on_float(TpFloat& type) = 0;
@@ -425,6 +430,7 @@ struct Ast: dom::DomItem {
 	pin<Method> mk_overload(pin<Class> cls, pin<Method> overloaded);
 	void add_this_param(ast::Function& fn, pin<ast::Class> cls);
 
+	pin<TpHandle> tp_handle();
 	pin<TpInt64> tp_int64();
 	pin<TpInt32> tp_int32();
 	pin<TpDouble> tp_double();
