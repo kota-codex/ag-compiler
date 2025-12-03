@@ -894,6 +894,7 @@ struct Generator : ast::ActionScanner {
 	void on_const_float(ast::ConstFloat& node) override { result->data = llvm::ConstantFP::get(float_type, node.value); }
 	void on_const_double(ast::ConstDouble& node) override { result->data = llvm::ConstantFP::get(double_type, node.value); }
 	void on_const_void(ast::ConstVoid&) override { result->data = llvm::UndefValue::get(void_type); }
+	void on_const_handle(ast::ConstHandle&) override { result->data = builder->getInt64(0); }
 	void on_const_bool(ast::ConstBool& node) override { result->data = builder->getInt1(node.value); }
 	void on_const_string(ast::ConstString& node) override {
 		auto& str = string_literals[node.value];

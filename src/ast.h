@@ -497,6 +497,11 @@ struct ConstVoid : Action {
 	DECLARE_DOM_CLASS(ConstVoid);
 };
 
+struct ConstHandle : Action {
+	void match(ActionMatcher& matcher) override;
+	DECLARE_DOM_CLASS(ConstHandle);
+};
+
 struct ConstBool : Action {  // it produces optional<void>
 	bool value = false;
 	void match(ActionMatcher& matcher) override;
@@ -806,6 +811,7 @@ struct ActionMatcher {
 	virtual void on_const_float(ConstFloat& node);
 	virtual void on_const_double(ConstDouble& node);
 	virtual void on_const_void(ConstVoid& node);
+	virtual void on_const_handle(ConstHandle& node);
 	virtual void on_const_bool(ConstBool& node);
 	virtual void on_break(Break& node);
 	virtual void on_get(Get& node);

@@ -82,6 +82,7 @@ struct Typer : ast::ActionMatcher {
 	void on_const_float(ast::ConstFloat& node) override { node.type_ = ast->tp_float(); }
 	void on_const_double(ast::ConstDouble& node) override { node.type_ = ast->tp_double(); }
 	void on_const_void(ast::ConstVoid& node) override { node.type_ = ast->tp_void(); }
+	void on_const_handle(ast::ConstHandle& node) override { node.type_ = ast->tp_handle(); }
 	void on_const_bool (ast::ConstBool& node) override { node.type_ = tp_bool; }
 	void on_mk_lambda(ast::MkLambda& node) override {
 		for (auto& p : node.names) {

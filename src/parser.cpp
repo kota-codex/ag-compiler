@@ -406,6 +406,8 @@ struct Parser {
 			return make<ast::ConstString>();
 		if (match("noreturn"))
 			return make<ast::Break>();
+		if (match("sys_handle"))
+			return make<ast::ConstHandle>();
 		if (match("?")) {
 			auto r = make<ast::If>();
 			r->p[0] = make<ast::ConstBool>();
@@ -909,6 +911,8 @@ struct Parser {
 			r->value = matched_true;
 			return r;
 		}
+		if (match("sys_handle"))
+			return make<ast::ConstHandle>();
 		if (match("short"))
 			return make<ast::ToInt32Op>()->fill(parse_expression_in_parethesis());
 		if (match("float"))

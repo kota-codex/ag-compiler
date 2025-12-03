@@ -25,6 +25,7 @@ own<TypeWithFills> ConstString::dom_type_;
 own<TypeWithFills> ConstFloat::dom_type_;
 own<TypeWithFills> ConstDouble::dom_type_;
 own<TypeWithFills> ConstVoid::dom_type_;
+own<TypeWithFills> ConstHandle::dom_type_;
 own<TypeWithFills> ConstBool::dom_type_;
 own<TypeWithFills> MkLambda::dom_type_;
 own<TypeWithFills> Call::dom_type_;
@@ -160,6 +161,7 @@ void initialize() {
 		->field("value", pin<CField<&ConstDouble::value>>::make(
 			cpp_dom->mk_type(Kind::FLOAT, sizeof(double))));
 	ConstVoid::dom_type_ = (new CppClassType<ConstVoid>(cpp_dom, { "m0", "VoidVal" }));
+	ConstHandle::dom_type_ = (new CppClassType<ConstHandle>(cpp_dom, { "m0", "HandleVal" }));
 	ConstBool::dom_type_ = (new CppClassType<ConstBool>(cpp_dom, { "m0", "BoolVal" }))
 		->field("val", pin<CField<&ConstBool::value>>::make(bool_type));
 	Get::dom_type_ = (new CppClassType<Get>(cpp_dom, { "m0", "Get" }))
@@ -350,6 +352,7 @@ void ConstString::match(ActionMatcher& matcher) { matcher.on_const_string(*this)
 void ConstFloat::match(ActionMatcher& matcher) { matcher.on_const_float(*this); }
 void ConstDouble::match(ActionMatcher& matcher) { matcher.on_const_double(*this); }
 void ConstVoid::match(ActionMatcher& matcher) { matcher.on_const_void(*this); }
+void ConstHandle::match(ActionMatcher& matcher) { matcher.on_const_handle(*this); }
 void ConstBool::match(ActionMatcher& matcher) { matcher.on_const_bool(*this); }
 void Get::match(ActionMatcher& matcher) { matcher.on_get(*this); }
 void Set::match(ActionMatcher& matcher) { matcher.on_set(*this); }
@@ -410,6 +413,7 @@ void ActionMatcher::on_const_string(ConstString& node) { on_unmatched(node); }
 void ActionMatcher::on_const_float(ConstFloat& node) { on_unmatched(node); }
 void ActionMatcher::on_const_double(ConstDouble& node) { on_unmatched(node); }
 void ActionMatcher::on_const_void(ConstVoid& node) { on_unmatched(node); }
+void ActionMatcher::on_const_handle(ConstHandle& node) { on_unmatched(node); }
 void ActionMatcher::on_const_bool(ConstBool& node) { on_unmatched(node); }
 void ActionMatcher::on_get(Get& node) { on_unmatched(node); }
 void ActionMatcher::on_set(Set& node) { on_unmatched(node); }
