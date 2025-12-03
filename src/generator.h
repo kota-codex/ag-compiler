@@ -7,8 +7,7 @@
 llvm::orc::ThreadSafeModule generate_code(
     ltm::pin<ast::Ast> ast,
     bool add_debug_info,
-    std::string entry_point_name);
-
-int64_t generate_and_execute(ltm::pin<ast::Ast> ast, bool add_debug_info, bool dump_ir);  // used without import in `compiler-test.cpp`
+    std::string entry_point_name,
+    bool pie_compat);
 
 #endif  // _AK_GENERATOR_H_

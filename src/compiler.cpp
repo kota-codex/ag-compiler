@@ -88,6 +88,7 @@ int main(int argc, char* argv[]) {
     bool output_bitcode = false;
     bool output_asm = false;
     bool add_debug_info = false;
+    bool pie_compat = false;
     string test_filter;
     string start_module_name, out_file_name, opt_level;
     string entry_point_name = "main";
@@ -115,6 +116,7 @@ int main(int argc, char* argv[]) {
                 "  -emit-llvm : output bitcode\n"
                 "  -S         : output asm/ll file\n"
                 "  -ON        : optimize 0-none, 1-less, 2-default, 3-aggressive\n"
+                "  -pie       : build pie-compatible interface tables\n"
                 "  -e fn_name : entry point fn name (default `main`)\n"
                 "  -T regexp  : build tests\n"
                 "  -L linkFile : filename for compiler to write a list of all libs to link\n"
@@ -128,6 +130,10 @@ int main(int argc, char* argv[]) {
             output_bitcode = true;
         } else if (strcmp(*arg, "-g") == 0) {
             add_debug_info = true;
+        } else if (strcmp(*arg, "-S") == 0) {
+            output_asm = true;
+        } else if (strcmp(*arg, "-pie") == 0) {
+            pie_compat = true;
         } else if (strncmp(*arg, "-O", 2) == 0) {
             opt_level = (*arg) + 2;
         } else if (strcmp(*arg, "-target") == 0) {
@@ -186,7 +192,7 @@ int main(int argc, char* argv[]) {
     llvm::InitializeAllTargets();
     llvm::InitializeAllTargetMCs();
     llvm::InitializeAllAsmPrinters();
-    auto threadsafe_module = generate_code(ast, add_debug_info, entry_point_name);
+    auto threadsafe_module = generate_code(ast, add_debug_info, entry_point_name, pie_compat);
     threadsafe_module.withModuleDo([&](llvm::Module& module) {
         std::error_code err_code;
         llvm::raw_fd_ostream out_file(out_file_name, err_code, llvm::sys::fs::OF_None);

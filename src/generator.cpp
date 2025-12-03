@@ -116,7 +116,10 @@ struct ClassInfo {
 	llvm::StructType* fields = nullptr; // header{disp, counter} + fields. To access dispatcher or counter
 										// obj_ptr{dispatcher_fn*, counter}; where dispatcher_fn void*(uint64_t interface_and_method_id)
 										// to access vmt: cast dispatcher_fn to vmt and apply offset -1
-	llvm::StructType* vmt = nullptr;       // only for class { (dispatcher_fn_used_as_id*, methods*)*, copier_fn*, disposer_fn*, instance_size, vmt_size};
+	// only for class { (dispatcher_fn_used_as_id, methods*)+, copier_fn*, disposer_fn*, instance_size, vmt_size};
+	// If pie, stored as {vmt struct, (a vmt pointer points here)->pointerToDispFn}
+	// If not pie, vmt pointer points to disp fn, and vmt struct is a prefix data
+	llvm::StructType* vmt = nullptr;
 	uint64_t vmt_size = 0;                 // vmt bytes size - used in casts
 	llvm::Function* constructor = nullptr; // T*()
 	llvm::Function* initializer = nullptr; // void(void*)
@@ -262,11 +265,13 @@ struct Generator : ast::ActionScanner {
 		vector<llvm::Constant*>,
 		llvm::Constant*,
 		vec_ptr_hasher<llvm::Constant>> table_cache;
+	bool pie_compat = false;
 
-	Generator(ltm::pin<ast::Ast> ast, bool debug_info_mode)
+	Generator(ltm::pin<ast::Ast> ast, bool debug_info_mode, bool pic_compat)
 		: ast(ast)
 		, context(new llvm::LLVMContext)
 		, layout("")
+		, pie_compat(pie_compat)
 	{
 		module = std::make_unique<llvm::Module>("code", *context);
 		if (debug_info_mode)
@@ -1488,14 +1493,16 @@ struct Generator : ast::ActionScanner {
 		auto method = node.method->base.pinned();
 		auto m_ordinal = methods.at(method).ordinal;
 		auto build_non_null_pin_to_entry_point_code = [&] (llvm::Value* base_pin) {
-			auto disp = builder->CreateLoad(ptr_type, builder->CreateConstGEP2_32(obj_struct, base_pin, AG_HEADER_OFFSET, 0));
+			auto vptr = builder->CreateLoad(ptr_type, builder->CreateConstGEP2_32(obj_struct, base_pin, AG_HEADER_OFFSET, 0));
 			return method->cls->is_interface
 				? (llvm::Value*)builder->CreateCall(
-					llvm::FunctionCallee(dispatcher_fn_type, disp),
+					llvm::FunctionCallee(dispatcher_fn_type, pie_compat
+						? builder->CreateLoad(ptr_type, vptr)
+						: vptr),
 					{ builder->getInt64(classes.at(method->cls).interface_ordinal | m_ordinal) })
 				: (llvm::Value*)builder->CreateLoad(
 					ptr_type,
-					builder->CreateConstGEP2_32(classes.at(method->cls).vmt, disp, -1, m_ordinal));
+					builder->CreateConstGEP2_32(classes.at(method->cls).vmt, vptr, -1, m_ordinal));
 		};
 		result->data = builder->CreateInsertValue(
 			builder->CreateInsertValue(
@@ -1592,11 +1599,11 @@ struct Generator : ast::ActionScanner {
 					llvm::FunctionCallee(m_info.type, compiled_functions[calle_as_method->method]),
 					move(params));
 			} else if (method->cls->is_interface) {
+				auto vptr = builder->CreateLoad(ptr_type, builder->CreateConstGEP2_32(obj_struct, receiver, AG_HEADER_OFFSET, 0));
 				auto entry_point = builder->CreateCall(
-					llvm::FunctionCallee(
-						dispatcher_fn_type,
-						builder->CreateLoad(ptr_type, builder->CreateConstGEP2_32(obj_struct, receiver, AG_HEADER_OFFSET, 0))
-					),
+					llvm::FunctionCallee(dispatcher_fn_type, pie_compat
+						? builder->CreateLoad(ptr_type, vptr)
+						: vptr),
 					{ builder->getInt64(classes.at(method->cls).interface_ordinal | m_info.ordinal) });
 				result->data = builder->CreateCall(
 					llvm::FunctionCallee(m_info.type, entry_point),
@@ -2208,11 +2215,11 @@ struct Generator : ast::ActionScanner {
 		auto& cls_info = classes.at(cls);
 		if (cls->is_interface) {
 			auto interface_ordinal = builder->getInt64(cls_info.interface_ordinal);
+			auto vptr = builder->CreateLoad(ptr_type, builder->CreateConstGEP2_32(obj_struct, result->data, AG_HEADER_OFFSET, 0));
 			auto id = builder->CreateCall(
-				llvm::FunctionCallee(
-					dispatcher_fn_type,
-					builder->CreateLoad(ptr_type, builder->CreateConstGEP2_32(obj_struct, result->data, AG_HEADER_OFFSET, 0))
-				),
+				llvm::FunctionCallee(dispatcher_fn_type, pie_compat
+					? builder->CreateLoad(ptr_type, vptr)
+					: vptr),
 				{ interface_ordinal });
 			*result = compile_if(
 				*result_type,
@@ -3327,15 +3334,6 @@ struct Generator : ast::ActionScanner {
 					builder.CreateStructGEP(info.fields, result, field->offset));
 			}
 			builder.CreateRetVoid();
-			// Constructor
-			builder.SetInsertPoint(llvm::BasicBlock::Create(*context, "", info.constructor));
-			current_ll_fn = info.constructor;
-			result = builder.CreateCall(fn_allocate, {
-				builder.getInt64(layout.getTypeAllocSize(info.fields)) });
-			builder.CreateCall(info.initializer, { result });
-			auto typed_result = builder.CreateBitOrPointerCast(result, info.fields->getPointerTo());
-			builder.CreateStore(cast_to(info.dispatcher, ptr_type), builder.CreateConstGEP2_32(obj_struct, result, AG_HEADER_OFFSET, 0));
-			builder.CreateRet(typed_result);
 			// Disposer
 			if (special_copy_and_dispose.count(cls) == 0) {
 				builder.SetInsertPoint(llvm::BasicBlock::Create(*context, "", info.dispose));
@@ -3494,7 +3492,32 @@ struct Generator : ast::ActionScanner {
 				info.visit,
 				builder.getInt64(layout.getTypeStoreSize(info.fields)),
 				builder.getInt64(info.vmt_size) }));
-			info.dispatcher->setPrefixData(llvm::ConstantStruct::get(info.vmt, move(info.vmt_fields)));
+			llvm::Value* pic_vmt = nullptr;
+			if (pie_compat) {
+				auto pic_vmt_type = llvm::StructType::get(*context, { info.vmt, ptr_type });
+				pic_vmt = new llvm::GlobalVariable(*module,
+					pic_vmt_type,
+					true, // Constant
+					llvm::GlobalValue::InternalLinkage,
+					llvm::ConstantStruct::get(pic_vmt_type, {
+						llvm::ConstantStruct::get(info.vmt, move(info.vmt_fields)),
+						info.dispatcher}),
+					ast::format_str("ag_vmt_", cls->get_name()));
+			} else {
+				info.dispatcher->setPrefixData(llvm::ConstantStruct::get(info.vmt, move(info.vmt_fields)));
+			}
+			// Constructor
+			builder.SetInsertPoint(llvm::BasicBlock::Create(*context, "", info.constructor));
+			current_ll_fn = info.constructor;
+			result = builder.CreateCall(fn_allocate, {
+				builder.getInt64(layout.getTypeAllocSize(info.fields)) });
+			builder.CreateCall(info.initializer, { result });
+			auto typed_result = builder.CreateBitOrPointerCast(result, info.fields->getPointerTo());
+			auto vptr = pie_compat
+				? builder.CreateConstGEP1_32(info.vmt, pic_vmt, 1)
+				: cast_to(info.dispatcher, ptr_type);
+			builder.CreateStore(vptr, builder.CreateConstGEP2_32(obj_struct, result, AG_HEADER_OFFSET, 0));
+			builder.CreateRet(typed_result);
 			// Interface methods
 			unordered_map<uint64_t, llvm::Constant*> vmts;  // interface_id->vmt_struct
 			for (auto& i : cls->interface_vmts) {
@@ -3602,7 +3625,7 @@ struct Generator : ast::ActionScanner {
 	}
 };
 
-llvm::orc::ThreadSafeModule generate_code(ltm::pin<ast::Ast> ast, bool add_debug_info, string entry_point_name) {
-	Generator gen(ast, add_debug_info);
+llvm::orc::ThreadSafeModule generate_code(ltm::pin<ast::Ast> ast, bool add_debug_info, string entry_point_name, bool pie_compat) {
+	Generator gen(ast, add_debug_info, pie_compat);
 	return gen.build(entry_point_name);
 }
