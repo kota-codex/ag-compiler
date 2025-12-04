@@ -61,6 +61,7 @@ int main(int argc, char* argv[]) {
         "-src", "C:\\Users\\ak\\cpp\\ag\\out\\bin\\..\\lib::https://aglang.org/wp-json/repo/v1",
         "-start", "test",
         "-O0",
+        "-pie",
 //        "-emit-llvm",
 //        "-S",
         "-o", "test",
@@ -194,6 +195,10 @@ int main(int argc, char* argv[]) {
     llvm::InitializeAllAsmPrinters();
     auto threadsafe_module = generate_code(ast, add_debug_info, entry_point_name, pie_compat);
     threadsafe_module.withModuleDo([&](llvm::Module& module) {
+        if (pie_compat) {
+            module.setPICLevel(llvm::PICLevel::SmallPIC);
+            module.setPIELevel(llvm::PIELevel::Default);
+        }
         std::error_code err_code;
         llvm::raw_fd_ostream out_file(out_file_name, err_code, llvm::sys::fs::OF_None);
         if (err_code) {

@@ -3493,9 +3493,9 @@ struct Generator : ast::ActionScanner {
 				info.visit,
 				builder.getInt64(layout.getTypeStoreSize(info.fields)),
 				builder.getInt64(info.vmt_size) }));
-			llvm::Value* pic_vmt = nullptr;
+			llvm::GlobalVariable* pic_vmt = nullptr;
 			if (pie_compat) {
-				auto pic_vmt_type = llvm::StructType::get(*context, { info.vmt, ptr_type });
+				auto pic_vmt_type = llvm::StructType::get(*context, { info.vmt, dispatcher_fn_type->getPointerTo() });
 				pic_vmt = new llvm::GlobalVariable(*module,
 					pic_vmt_type,
 					true, // Constant
@@ -3504,6 +3504,7 @@ struct Generator : ast::ActionScanner {
 						llvm::ConstantStruct::get(info.vmt, move(info.vmt_fields)),
 						info.dispatcher}),
 					ast::format_str("ag_vmt_", cls->get_name()));
+				pic_vmt->setAlignment(llvm::Align(8));
 			} else {
 				info.dispatcher->setPrefixData(llvm::ConstantStruct::get(info.vmt, move(info.vmt_fields)));
 			}
