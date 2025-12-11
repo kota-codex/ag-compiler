@@ -62,11 +62,11 @@ int main(int argc, char* argv[]) {
         "-start", "test",
         "-O0",
         "-pie",
-//        "-emit-llvm",
-//        "-S",
-        "-o", "test",
-        "-L", "lnk",
-        "-D", "dep"
+        //        "-emit-llvm",
+        //        "-S",
+                "-o", "test",
+                "-L", "lnk",
+                "-D", "dep"
     };
     return ak_main(sizeof(params)/sizeof(params[0]), params);
 }
@@ -80,9 +80,9 @@ int main(int argc, char* argv[]) {
 #endif
     if (argc < 2) {
         llvm::outs() <<
-                "Argentum compiler by Andrey Kamlatskiy.\n"
-                "Usage: " << argv[0] << " -src path_to_sources -start module_name -o output_file <flags>\n"
-                "--help for more info.\n";
+            "Argentum compiler by Andrey Kamlatskiy.\n"
+            "Usage: " << argv[0] << " -src path_to_sources -start module_name -o output_file <flags>\n"
+            "--help for more info.\n";
         return 0;
     }
     auto target_triple = llvm::sys::getDefaultTargetTriple();
@@ -102,7 +102,7 @@ int main(int argc, char* argv[]) {
                 exit(1);
             }
             return *arg;
-        };
+            };
         if (strcmp(*arg, "--help") == 0) {
             llvm::outs() <<
                 "Flags\n"
@@ -163,7 +163,7 @@ int main(int argc, char* argv[]) {
             llvm::errs() << name << " name is not provided\n";
             panic();
         }
-    };
+        };
     check_str(start_module_name, "start module");
     check_str(out_file_name, "output file");
     if (out_file_name.find('.') == string::npos) {
@@ -171,8 +171,8 @@ int main(int argc, char* argv[]) {
         out_file_name +=
             output_bitcode ? (output_asm ? "ll" : "bc") :
             target_triple.find("windows") == string::npos
-                ? (output_asm ? "s" : "o")
-                : (output_asm ? "asm" : "obj");
+            ? (output_asm ? "s" : "o")
+            : (output_asm ? "asm" : "obj");
     }
     ast::initialize();
     auto ast = own<Ast>::make();
@@ -184,7 +184,7 @@ int main(int argc, char* argv[]) {
     depot.read_source("sys", unused_sys_version, inised_sys_out_path);
     parse(ast, start_module_name, [&](auto name, auto& version, auto& out_path) {
         return depot.read_source(name, version, out_path);
-    });
+        });
     resolve_names(ast);
     check_types(ast);
     prune(ast);
@@ -195,10 +195,6 @@ int main(int argc, char* argv[]) {
     llvm::InitializeAllAsmPrinters();
     auto threadsafe_module = generate_code(ast, add_debug_info, entry_point_name, pie_compat);
     threadsafe_module.withModuleDo([&](llvm::Module& module) {
-        if (pie_compat) {
-            module.setPICLevel(llvm::PICLevel::SmallPIC);
-            module.setPIELevel(llvm::PIELevel::Default);
-        }
         std::error_code err_code;
         llvm::raw_fd_ostream out_file(out_file_name, err_code, llvm::sys::fs::OF_None);
         if (err_code) {
@@ -254,7 +250,7 @@ int main(int argc, char* argv[]) {
             llvm::outs() << "DEPS: " << deps << '\n';
         else
             write_file(dep_list_file, deps);
-    });
+        });
     return 0;
 }
 

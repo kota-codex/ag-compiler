@@ -1,4 +1,4 @@
-#include "generator.h"
+﻿#include "generator.h"
 
 #include <functional>
 #include <string>
@@ -132,6 +132,8 @@ struct ClassInfo {
 	llvm::ArrayType* ivmt = nullptr;       // only for interface i8*[methods_count+1], ivmt[0]=inteface_id
 	llvm::DICompositeType* di_cls = 0;
 	llvm::DIType* di_ptr = 0;
+	llvm::GlobalVariable* pic_vmt = nullptr;  // only in pic mode, global var struct, containing vmt+disp_ptr
+	llvm::StructType* pic_vmt_type = nullptr; // only in pic mode, type of struct, containing vmt+disp_ptr
 };
 
 template<typename T>
@@ -267,13 +269,19 @@ struct Generator : ast::ActionScanner {
 		vec_ptr_hasher<llvm::Constant>> table_cache;
 	bool pie_compat = false;
 
-	Generator(ltm::pin<ast::Ast> ast, bool debug_info_mode, bool pic_compat)
+	Generator(ltm::pin<ast::Ast> ast, bool debug_info_mode, bool pie_compat)
 		: ast(ast)
 		, context(new llvm::LLVMContext)
 		, layout("")
 		, pie_compat(pie_compat)
 	{
 		module = std::make_unique<llvm::Module>("code", *context);
+        if (pie_compat) {
+            module->setPICLevel(llvm::PICLevel::SmallPIC);
+            module->setPIELevel(llvm::PIELevel::Small);
+        }
+		module->addModuleFlag(llvm::Module::ModFlagBehavior::AppendUnique, "cf-protection-return", uint32_t(0));
+		module->addModuleFlag(llvm::Module::ModFlagBehavior::AppendUnique, "cf-protection-branch", uint32_t(0));
 		if (debug_info_mode)
 			make_di_basic();
 		int_type = llvm::Type::getInt64Ty(*context);
@@ -899,22 +907,25 @@ struct Generator : ast::ActionScanner {
 	void on_const_string(ast::ConstString& node) override {
 		auto& str = string_literals[node.value];
 		if (!str) {
-			auto str_name = ast::format_str("ag_str_", &node);
 			auto& cls = classes.at(ast->string_cls);
 			llvm::Constant* str_constant = llvm::ConstantDataArray::getString(*context, node.value);
 			auto* str_type = llvm::StructType::get(obj_struct, str_constant->getType());
-			module->getOrInsertGlobal(str_name, str_type);
-			str = module->getGlobalVariable(str_name);
-			vector<llvm::Constant*> obj_fields = {
-				llvm::ConstantExpr::getBitCast(cls.dispatcher, ptr_type),
-				const_ctr_str_literal, // shared|mt|hash|0
-				llvm::ConstantInt::get(tp_int_ptr, ag_getStringHash(node.value.c_str()) | 1) };    // parent/weak/hash field
-			str->setInitializer(
+			str = new llvm::GlobalVariable(*module,
+				str_type,
+				false, //true, // Constant
+				llvm::GlobalValue::InternalLinkage,
 				llvm::ConstantStruct::get(str_type, {
-					llvm::ConstantStruct::get(obj_struct, obj_fields),
+					llvm::ConstantStruct::get(obj_struct, {
+						pie_compat ? llvm::ConstantExpr::getGetElementPtr(cls.vmt, cls.pic_vmt, const_1) : cls.dispatcher,
+						const_ctr_str_literal, // shared|mt|hash|0
+						llvm::ConstantInt::get(tp_int_ptr, ag_getStringHash(node.value.c_str()) | 1) // parent/weak/hash field),
+					}),
 					str_constant
-				}));
-			str->setLinkage(llvm::GlobalValue::InternalLinkage);
+				}),
+				ast::format_str("ag_str_", &node));
+			if (pie_compat)
+				str->setDSOLocal(false);
+			str->setAlignment(llvm::Align(8));
 		}
 		result->data = str;
 		result->lifetime = Val::Static{};
@@ -1310,6 +1321,8 @@ struct Generator : ast::ActionScanner {
 				: llvm::Function::InternalLinkage,
 			name,
 			module.get());
+		if (pie_compat)
+			fn->setDSOLocal(false);
 		compiled_functions[&node] = fn;
 		if (!is_external) {
 			compile_fn_body(node, name, fn, closure_ptr_type);
@@ -1532,6 +1545,8 @@ struct Generator : ast::ActionScanner {
 			llvm::Function::InternalLinkage,
 			ast::format_str("ag_dl_", node.module->name, "_", node.name),
 			module.get());
+		if (pie_compat)
+			dl_fn->setDSOLocal(false);
 		execute_in_global_scope.push_back([&, dl_fn] {
 			compile_fn_body(node, ast::format_str("ag_dl_", node.module->name, "_", node.name), dl_fn);
 		});
@@ -1811,6 +1826,8 @@ struct Generator : ast::ActionScanner {
 			llvm::Function::InternalLinkage,
 			ast::format_str("ag_tr_", (void*)type),
 			module.get());
+		if (pie_compat)
+			tramp.first->setDSOLocal(false);
 		llvm::Function* prev = current_ll_fn;
 		current_ll_fn = tramp.first;
 		auto prev_builder = builder;
@@ -3170,6 +3187,8 @@ struct Generator : ast::ActionScanner {
 					llvm::Function::ExternalLinkage,
 					disp_name,
 					module.get());
+				if (pie_compat)
+					info.dispatcher->setDSOLocal(false);
 				if (di_builder) {
 					info.dispatcher->setSubprogram(
 						di_builder->createFunction(
@@ -3274,6 +3293,17 @@ struct Generator : ast::ActionScanner {
 			} else {
 				info.vmt = llvm::StructType::get(*context, vmt_content);
 				info.vmt_size = layout.getTypeStoreSize(info.vmt);
+				if (pie_compat) {
+					info.pic_vmt_type = llvm::StructType::get(*context, { info.vmt, dispatcher_fn_type->getPointerTo() });
+					info.pic_vmt = new llvm::GlobalVariable(*module,
+						info.pic_vmt_type,
+						false, //true, // Constant
+						llvm::GlobalValue::InternalLinkage,
+						nullptr, // values (later)
+						ast::format_str("ag_vmt_", cls->get_name()));
+					info.pic_vmt->setDSOLocal(false);
+					info.pic_vmt->setAlignment(llvm::Align(8));
+				}
 			}
 		}
 		for (auto& m : ast->modules_in_order) {
@@ -3297,6 +3327,8 @@ struct Generator : ast::ActionScanner {
 					? llvm::Function::ExternalLinkage
 					: llvm::Function::InternalLinkage,
 					ast::format_str("ag_fn_", m.first, "_", fn.first), module.get());
+				if (pie_compat)
+					f->setDSOLocal(false);
 				if (dom::isa<ast::TpNoRet>(*cast<ast::TpLambda>(fn.second->type())->params.back())) {
 					f->addFnAttr(llvm::Attribute::NoReturn);
 				}
@@ -3493,18 +3525,10 @@ struct Generator : ast::ActionScanner {
 				info.visit,
 				builder.getInt64(layout.getTypeStoreSize(info.fields)),
 				builder.getInt64(info.vmt_size) }));
-			llvm::GlobalVariable* pic_vmt = nullptr;
 			if (pie_compat) {
-				auto pic_vmt_type = llvm::StructType::get(*context, { info.vmt, dispatcher_fn_type->getPointerTo() });
-				pic_vmt = new llvm::GlobalVariable(*module,
-					pic_vmt_type,
-					true, // Constant
-					llvm::GlobalValue::InternalLinkage,
-					llvm::ConstantStruct::get(pic_vmt_type, {
-						llvm::ConstantStruct::get(info.vmt, move(info.vmt_fields)),
-						info.dispatcher}),
-					ast::format_str("ag_vmt_", cls->get_name()));
-				pic_vmt->setAlignment(llvm::Align(8));
+				info.pic_vmt->setInitializer(llvm::ConstantStruct::get(info.pic_vmt_type, {
+					llvm::ConstantStruct::get(info.vmt, move(info.vmt_fields)),
+					info.dispatcher }));
 			} else {
 				info.dispatcher->setPrefixData(llvm::ConstantStruct::get(info.vmt, move(info.vmt_fields)));
 			}
@@ -3516,7 +3540,7 @@ struct Generator : ast::ActionScanner {
 			builder.CreateCall(info.initializer, { result });
 			auto typed_result = builder.CreateBitOrPointerCast(result, info.fields->getPointerTo());
 			auto vptr = pie_compat
-				? builder.CreateConstGEP1_32(info.vmt, pic_vmt, 1)
+				? builder.CreateConstGEP1_32(info.vmt, info.pic_vmt, 1)
 				: cast_to(info.dispatcher, ptr_type);
 			builder.CreateStore(vptr, builder.CreateConstGEP2_32(obj_struct, result, AG_HEADER_OFFSET, 0));
 			builder.CreateRet(typed_result);
@@ -3589,6 +3613,7 @@ struct Generator : ast::ActionScanner {
 				}
 			}
 		}
+		makeAgMakeStrFn();
 		// Main
 		compile_fn_body(*ast->starting_module->entry_point, entry_point_name,
 			llvm::Function::Create(
@@ -3621,9 +3646,56 @@ struct Generator : ast::ActionScanner {
 		module->getOrInsertGlobal(name, type);
 		auto result = module->getGlobalVariable(name);
 		result->setInitializer(llvm::ConstantArray::get(type, move(content)));
-		result->setConstant(true);
 		result->setLinkage(llvm::GlobalValue::InternalLinkage);
+		if (pie_compat)
+			result->setDSOLocal(false);
+		else
+			result->setConstant(true);
 		return cached = result;
+	}
+
+	// Creates function AgString* ag_make_str(const char* data, size_t size)
+	llvm::Function *makeAgMakeStrFn() {
+		auto tp_byte = llvm::Type::getInt8Ty(*context);
+		auto tp_byte_ptr = tp_byte->getPointerTo();
+		auto& str_cls = classes.at(ast->string_cls);
+		auto fn_type = llvm::FunctionType::get(ptr_type, { tp_byte_ptr, int_type}, false);
+		auto fn = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage, "ag_make_str", *module);
+		if (pie_compat)
+			fn->setDSOLocal(false);
+
+		auto param_iter = fn->arg_begin();
+		auto param_data = &*param_iter++;
+		auto param_size  = &*param_iter++;
+		llvm::IRBuilder<> b(llvm::BasicBlock::Create(*context, "", fn));
+		auto result = b.CreateCall(fn_allocate, {
+			b.CreateAdd(
+				b.getInt64(layout.getTypeAllocSize(str_cls.fields)),
+				param_size)});
+		auto chars_ptr = b.CreateStructGEP(str_cls.fields, result, str_cls.fields->getNumElements() - 1);
+		b.CreateCall(
+			llvm::Intrinsic::getDeclaration(&*module, llvm::Intrinsic::memcpy, { tp_byte_ptr, tp_byte_ptr, int_type }),
+			{ chars_ptr, param_data, param_size});
+		b.CreateStore(
+			llvm::ConstantInt::get(tp_byte, 0),
+			b.CreateGEP(tp_byte, chars_ptr, param_size));
+		b.CreateStore(
+			pie_compat ? b.CreateConstGEP1_32(str_cls.vmt, str_cls.pic_vmt, 1) : str_cls.dispatcher,
+			b.CreateStructGEP(obj_struct, result, 0));
+		b.CreateStore(
+			llvm::ConstantInt::get(tp_int_ptr, AG_CTR_SHARED | AG_CTR_HASH | AG_CTR_STEP),
+			b.CreateStructGEP(obj_struct, result, 1));
+		b.CreateStore(
+			b.CreateOr(
+				const_1,
+				b.CreateCall(
+					module->getOrInsertFunction(
+						"ag_m_sys_String_getHash",
+						llvm::FunctionType::get(int_type, { ptr_type }, false)),
+					{ result })),
+			b.CreateStructGEP(obj_struct, result, 2));
+		b.CreateRet(result);
+		return fn;
 	}
 };
 
