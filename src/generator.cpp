@@ -48,7 +48,7 @@ T* dump(const char* name, T* val) {
 	if (!val)
 		llvm::outs() << "null";
 	else
-		val->print(llvm::outs(), false);
+		val->print(llvm::outs());
 	llvm::outs() << "\n";
 	return val;
 }
@@ -1178,9 +1178,15 @@ struct Generator : ast::ActionScanner {
 			}
 			++param_iter;
 		}
-		vector<Val> consts_to_dispose; // addr of const, todo: optimize with const pass
+		llvm::Function* const_disposer = nullptr;
 		if (handle_consts) {
 			builder->CreateCall(fn_init, {});
+			const_disposer = llvm::Function::Create(
+				llvm::FunctionType::get(void_type, {}, false),
+				llvm::Function::ExternalLinkage,
+				"ag_dispose_consts",
+				*module);
+			llvm::IRBuilder<> disposer_builder(llvm::BasicBlock::Create(*context, "", const_disposer));
 			for (auto& m : ast->modules_in_order) {
 				for (auto& c : m->constants) {
 					auto addr = globals[c.second];
@@ -1194,11 +1200,13 @@ struct Generator : ast::ActionScanner {
 								obj_struct,
 								cast_to(val.data, ptr_type),
 								1));
-						val.data = addr;
-						consts_to_dispose.push_back(move(val));
+						disposer_builder.CreateCall(fn_dispose, {
+							disposer_builder.CreateLoad(ptr_type, addr)
+						});
 					}
 				}
 			}
+			disposer_builder.CreateRetVoid();
 		}
 		auto prev_bb_for_captures = bb_for_captures;
 		llvm::BasicBlock* body_bb = builder->GetInsertBlock();
@@ -1253,21 +1261,23 @@ struct Generator : ast::ActionScanner {
 			}
 		};
 		release_params(fn_result);
-		auto dispose_consts = [&] {
-			if (handle_consts) {
-				for (; !consts_to_dispose.empty(); consts_to_dispose.pop_back()) {
-					builder->CreateCall(fn_dispose, {
-						builder->CreateLoad(ptr_type, consts_to_dispose.back().data)
-					});
-				}
-			}
-		};
 		if (handle_threads) {
 			auto main_ret_val = builder->CreateCall(fn_handle_main_thread, {});
-			dispose_consts();
+			auto ret_bb = llvm::BasicBlock::Create(*context, "", current_ll_fn);
+			auto disp_const_bb = llvm::BasicBlock::Create(*context, "", current_ll_fn);
+			builder->CreateCondBr(
+				builder->CreateCmp(llvm::CmpInst::Predicate::ICMP_NE, main_ret_val, const_0),
+				ret_bb,
+				disp_const_bb);
+			builder->SetInsertPoint(disp_const_bb);
+			if (const_disposer)
+				builder->CreateCall(const_disposer);
+			builder->CreateBr(ret_bb);
+			builder->SetInsertPoint(ret_bb);
 			builder->CreateRet(main_ret_val);
 		} else if (builder->GetInsertBlock()) { // not a dead code bypassed by break
-			dispose_consts();
+			if (const_disposer)
+				builder->CreateCall(const_disposer);
 			if (fn_result.data) {
 				builder->CreateRet(fn_result.data);
 			} else {
@@ -3674,8 +3684,8 @@ struct Generator : ast::ActionScanner {
 				param_size)});
 		auto chars_ptr = b.CreateStructGEP(str_cls.fields, result, str_cls.fields->getNumElements() - 1);
 		b.CreateCall(
-			llvm::Intrinsic::getDeclaration(&*module, llvm::Intrinsic::memcpy, { tp_byte_ptr, tp_byte_ptr, int_type }),
-			{ chars_ptr, param_data, param_size});
+			llvm::Intrinsic::getDeclaration(&*module, llvm::Intrinsic::memcpy, { tp_byte_ptr, tp_byte_ptr, int_type, tp_bool }),
+			{ chars_ptr, param_data, param_size, llvm::ConstantInt::getFalse(*context) });
 		b.CreateStore(
 			llvm::ConstantInt::get(tp_byte, 0),
 			b.CreateGEP(tp_byte, chars_ptr, param_size));
