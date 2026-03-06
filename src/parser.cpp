@@ -79,6 +79,7 @@ struct Parser {
 				break;
 			expect(",");
 		}
+		fn->used = match("_retain_");
 		auto as_method = dom::strict_cast<ast::Method>(fn);
 		if (match("this")) {
 			if (as_method)
