@@ -59,6 +59,7 @@ struct Parser {
 	unordered_map<string, pin<ast::ImmediateDelegate>> delegates;
 	pin<ast::Class> current_class;  // To match type parameters
 	bool underscore_accessed = false;
+	bool last_ws_had_new_line;
 
 	Parser(pin<Ast> ast, string module_name, unordered_set<string>& modules_in_dep_path)
 		: dom(ast->dom)
@@ -77,7 +78,7 @@ struct Parser {
 			param->initializer = parse_non_void_type();
 			if (match(")"))
 				break;
-			expect(",");
+			expect_new_line_or(",");
 		}
 		if (match("_retain_"))
 			ast->retained_fns.push_back(fn);
@@ -91,11 +92,11 @@ struct Parser {
 		} else {
 			fn->type_expression = parse_maybe_void_type();
 		}
-		if (match(";")) {
+		if (!match("{")) {
+			expect_new_line_or(";");
 			fn->is_platform = true;
 			return;
 		}
-		expect("{");
 		parse_statement_sequence(fn->body);
 		expect("}");
 	}
@@ -112,9 +113,11 @@ struct Parser {
 	}
 
 	ast::LongName expect_long_name(const char* message, pin<ast::Module> def_module) {
-		auto id = expect_id(message);
-		if (!match("_"))
+		auto id = expect_id_ns(message);
+		if (!match_ns("_")) {
+			match_ws();
 			return { id, def_module };
+		}
 		if (auto it = module->direct_imports.find(id); it != module->direct_imports.end()) {
 			ast::LongName r{ expect_id(message), it->second };
 			if (r.name[0] == '_')
@@ -156,13 +159,21 @@ struct Parser {
 		if (dom::isa<ast::ClassParam>(*r))
 			error("Class parameter cannot be parameterized: ", r->get_name());
 		vector<weak<ast::AbstractClass>> params{ r };
-		do
+		for (;;) {
 			params.push_back(parse_class_with_params(expect_long_name("class parameter", nullptr), true));
-		while (match(","));
-		expect(")");
+			if (match(")"))
+				break;
+			expect_new_line_or(",");
+		}
 		return ast->get_class_instance(move(params));
 	}
 
+	void expect_new_line_or(const char* s) {
+		set_maybe_match_pos();
+		if (match(s) || last_ws_had_new_line)
+			return;
+		error(string("expected '") + s + "' or new line");
+	}
 	pin<ast::Module> parse(module_text_provider_t module_text_provider, int64_t requested_version)
 	{
 		if (modules_in_dep_path.count(module_name) != 0) {
@@ -205,7 +216,7 @@ struct Parser {
 				: Parser(ast, using_name, modules_in_dep_path).parse(module_text_provider, using_version);
 			module->direct_imports.insert({ using_name, used_module });
 			if (match("{")) {
-				do {
+				for (;;) {
 					auto my_id = expect_id("alias name");
 					auto their_id = my_id;
 					if (match("=")) {
@@ -223,10 +234,12 @@ struct Parser {
 						module->aliases.insert({ my_id, it->second });
 					else
 						error("unknown name ", their_id, " in module ", using_name);
-				} while (match(","));
-				expect("}");
+					if (match("}"))
+						break;
+					expect_new_line_or(",");
+				}
 			} else {
-				expect(";");
+				expect_new_line_or(";");
 			}
 		}
 		ast->modules_in_order.push_back(module);
@@ -239,7 +252,7 @@ struct Parser {
 				v->name = id;
 				v->is_const = true;
 				module->constants.insert({ id, v });
-				expect(";");
+				expect_new_line_or(";");
 				continue;
 			}
 			if (match("enum")) {
@@ -304,7 +317,7 @@ struct Parser {
 							while (!match("}"))
 								base_content.push_back(make_method(expect_long_name("override method name", nullptr), cls, is_interface));
 						} else {
-							expect(";");
+							expect_new_line_or(";");
 						}
 					} else {
 						ast::Mut is_mut =
@@ -321,7 +334,7 @@ struct Parser {
 							cls->fields.back()->name = member_name;
 							cls->fields.back()->cls = cls;
 							cls->fields.back()->initializer = parse_expression();
-							expect(";");
+							expect_new_line_or(";");
 						} else {
 							cls->new_methods.push_back(make_method({ member_name, module }, cls, is_interface));
 							cls->new_methods.back()->mut = is_mut;
@@ -362,13 +375,20 @@ struct Parser {
 	}
 
 	void parse_statement_sequence(vector<own<Action>>& body) {
-		do {
+		for (;;) {
 			if (*cur == '}' || !*cur) {
 				body.push_back(make<ast::ConstVoid>());
 				break;
 			}
-			body.push_back(parse_statement());
-		} while (match(";"));
+			for (;;) {
+				body.push_back(parse_statement());
+				if (match(";")) break;
+				if (*cur == '}' || !*cur)
+					return;
+				if (!last_ws_had_new_line)
+					error("expected new line, ';' or '}'");
+			}
+		}
 	}
 	pin<ast::Action> mk_get(ast::LongName n) {
 		if (!n.module && current_class) {
@@ -423,7 +443,7 @@ struct Parser {
 					fn->names.back()->initializer = parse_non_void_type();
 					if (match(")"))
 						break;
-					expect(",");
+					expect_new_line_or(",");
 				}
 			}
 			return fn;
@@ -499,7 +519,7 @@ struct Parser {
 				initializer->body.push_back(parse_expression());
 				initializer->break_name = var->name;
 				block->names.push_back(var);
-				expect(";");
+				expect_new_line_or(";");
 				parse_statement_sequence(block->body);
 				return block;
 			}
@@ -511,6 +531,11 @@ struct Parser {
 		return parse_elses();
 	}
 
+	pin<ast::MkLambda> maybe_parse_lambda_on_same_line() {
+		if (last_ws_had_new_line)
+			return nullptr;
+		return maybe_parse_lambda();
+	}
 	pin<ast::MkLambda> maybe_parse_lambda() {
 		if (*cur != '`' && *cur != '\\' && *cur != '{')
 			return nullptr;
@@ -573,7 +598,7 @@ struct Parser {
 
 	pin<Action> parse_elses() {
 		auto r = parse_ifs();
-		return match(":")
+		return match_infix_op(":")
 			? make<ast::Else>()->fill(
 				r,
 				parse_lambda_0_params([&] { return parse_elses(); }))
@@ -582,11 +607,11 @@ struct Parser {
 
 	pin<Action> parse_ifs() {
 		auto r = parse_ors();
-		if (match("&&"))
+		if (match_infix_op("&&"))
 			return make<ast::LAnd>()->fill(
 				r,
 				parse_lambda_1_param([&] { return parse_ifs(); }));
-		if (match("?")) {
+		if (match_infix_op("?")) {
 			return make<ast::If>()->fill(
 				r,
 				parse_lambda_1_param([&] { return parse_ifs(); }));
@@ -596,7 +621,7 @@ struct Parser {
 
 	pin<Action> parse_ors() {
 		auto r = parse_comparisons();
-		while (match("||"))
+		while (match_infix_op("||"))
 			r = make<ast::LOr>()->fill(
 				r,
 				parse_lambda_0_params([&] { return parse_comparisons(); }));
@@ -605,20 +630,20 @@ struct Parser {
 
 	pin<Action> parse_comparisons() {
 		auto r = parse_adds();
-		if (match("==")) return make<ast::EqOp>()->fill(r, parse_adds());
-		if (match(">=")) return make<ast::NotOp>()->fill(make<ast::LtOp>()->fill(r, parse_adds()));
-		if (match("<=")) return make<ast::NotOp>()->fill(make<ast::LtOp>()->fill(parse_adds(), r));
-		if (match("<")) return make<ast::LtOp>()->fill(r, parse_adds());
-		if (match(">")) return make<ast::LtOp>()->fill(parse_adds(), r);
-		if (match("!=")) return make<ast::NotOp>()->fill(make<ast::EqOp>()->fill(r, parse_adds()));
+		if (match_infix_op("==")) return make<ast::EqOp>()->fill(r, parse_adds());
+		if (match_infix_op(">=")) return make<ast::NotOp>()->fill(make<ast::LtOp>()->fill(r, parse_adds()));
+		if (match_infix_op("<=")) return make<ast::NotOp>()->fill(make<ast::LtOp>()->fill(parse_adds(), r));
+		if (match_infix_op("<")) return make<ast::LtOp>()->fill(r, parse_adds());
+		if (match_infix_op(">")) return make<ast::LtOp>()->fill(parse_adds(), r);
+		if (match_infix_op("!=")) return make<ast::NotOp>()->fill(make<ast::EqOp>()->fill(r, parse_adds()));
 		return r;
 	}
 
 	pin<Action> parse_adds() {
 		auto r = parse_muls();
 		for (;;) {
-			if (match("+")) r = make<ast::AddOp>()->fill(r, parse_muls());
-			else if (match("-")) r = make<ast::SubOp>()->fill(r, parse_muls());
+			if (match_infix_op("+")) r = make<ast::AddOp>()->fill(r, parse_muls());
+			else if (match_infix_op("-")) r = make<ast::SubOp>()->fill(r, parse_muls());
 			else break;
 		}
 		return r;
@@ -627,14 +652,14 @@ struct Parser {
 	pin<Action> parse_muls() {
 		auto r = parse_unar();
 		for (;;) {
-			if (match("*")) r = make<ast::MulOp>()->fill(r, parse_unar());
-			else if (match("/")) r = make<ast::DivOp>()->fill(r, parse_unar());
-			else if (match("%")) r = make<ast::ModOp>()->fill(r, parse_unar());
-			else if (match("<<")) r = make<ast::ShlOp>()->fill(r, parse_unar());
-			else if (match(">>")) r = make<ast::ShrOp>()->fill(r, parse_unar());
+			if (match_infix_op("*")) r = make<ast::MulOp>()->fill(r, parse_unar());
+			else if (match_infix_op("/")) r = make<ast::DivOp>()->fill(r, parse_unar());
+			else if (match_infix_op("%")) r = make<ast::ModOp>()->fill(r, parse_unar());
+			else if (match_infix_op("<<")) r = make<ast::ShlOp>()->fill(r, parse_unar());
+			else if (match_infix_op(">>")) r = make<ast::ShrOp>()->fill(r, parse_unar());
 			else if (match_and_not("&", '&')) r = make<ast::AndOp>()->fill(r, parse_unar());
 			else if (match_and_not("|", '|')) r = make<ast::OrOp>()->fill(r, parse_unar());
-			else if (match("^")) r = make<ast::XorOp>()->fill(r, parse_unar());
+			else if (match_infix_op("^")) r = make<ast::XorOp>()->fill(r, parse_unar());
 			else break;
 		}
 		return r;
@@ -676,23 +701,25 @@ struct Parser {
 			call->params.push_back(parse_expression());
 			if (match(")"))
 				break;
-			expect(",");
+			expect_new_line_or(",");
 		}
-		if (auto extra_param = maybe_parse_lambda())
+		if (auto extra_param = maybe_parse_lambda_on_same_line())
 			call->params.push_back(extra_param);
 		return call;
 	}
 	pin<Action> parse_unar() {
 		auto r = parse_unar_head();
 		for (;;) {
-			if (match("(")) {
+			if (match_same_line("(")) {
 				r = parse_call(r, make<ast::Call>());
-			} else if (match("[")) {
+			} else if (match_same_line("[")) {
 				auto gi = make<ast::GetAtIndex>();
-				do
+				for (;;) {
 					gi->indexes.push_back(parse_expression());
-				while (match(","));
-				expect("]");
+					if (match("]"))
+						break;
+					expect_new_line_or(",");
+				}
 				if (auto op = match_set_op()) {
 					auto block = make_at_location<ast::Block>(*gi);
 					block->names.push_back(make_at_location<ast::Var>(*r));
@@ -812,7 +839,7 @@ struct Parser {
 						}
 						if (match(")"))
 							break;
-						expect(",");
+						expect_new_line_or(",");
 					}
 				}
 				d->type_expression = make<ast::ConstVoid>();
@@ -820,12 +847,12 @@ struct Parser {
 				parse_statement_sequence(d->body);
 				expect("}");
 				r = c;
-			} else if (match("~")) {
+			} else if (match_infix_op("~")) {
 				if (match("("))
 					r = parse_call(r, make<ast::AsyncCall>());
 				else
 					r = make<ast::CastOp>()->fill(r, parse_unar_head());
-			} else if (auto lambda_tail = maybe_parse_lambda()) {
+			} else if (auto lambda_tail = maybe_parse_lambda_on_same_line()) {
 				auto call = make_at_location<ast::Call>(*lambda_tail);
 				call->callee = r;
 				call->params.push_back(lambda_tail);
@@ -867,19 +894,19 @@ struct Parser {
 		}
 		if (auto r = maybe_parse_lambda())
 			return r;
-		if (match("*"))
+		if (match_prefix_op("*"))
 			return make<ast::FreezeOp>()->fill(parse_unar());
-		if (match("@"))
+		if (match_prefix_op("@"))
 			return make<ast::CopyOp>()->fill(parse_unar());
-		if (match("&"))
+		if (match_prefix_op("&"))
 			return make<ast::MkWeakOp>()->fill(parse_unar());
-		if (match("!"))
+		if (match_prefix_op("!"))
 			return make<ast::NotOp>()->fill(parse_unar());
-		if (match("-"))
+		if (match_prefix_op("-"))
 			return make<ast::NegOp>()->fill(parse_unar());
-		if (match("~"))
+		if (match_prefix_op("~"))
 			return make<ast::InvOp>()->fill(parse_unar());
-		if (match("^")) {
+		if (match_prefix_op("^")) {
 			auto r = make<ast::Break>();
 			r->block_name = expect_id("block to break");
 			if (match("="))
@@ -898,8 +925,8 @@ struct Parser {
 			if (auto v = get_if<double>(&*n))
 				return mk_const<ast::ConstDouble>(*v);
 		}
-		bool matched_true = match("+");
-		if (matched_true || match("?")) {
+		bool matched_true = match_prefix_op("+");
+		if (matched_true || match_prefix_op("?")) {
 			auto r = make<ast::If>();
 			auto cond = make<ast::ConstBool>();
 			cond->value = matched_true;
@@ -938,7 +965,7 @@ struct Parser {
 		if (match("utf32_")) {
 			expect("(");
 			auto r = make<ast::ConstString>();
-			do {
+			for (;;) {
 				auto param = parse_expression();
 				if (auto param_as_int = dom::strict_cast<ast::ConstInt64>(param)) {
 					if (!put_utf8(param_as_int->value, &r->value, [](void* dst, int byte) {
@@ -955,8 +982,10 @@ struct Parser {
 				} else {  // Todo: remove after const evaluation pass
 					error("so far only literal numbers are supported as utf32_ parameter");
 				}
-			} while (match(","));
-			expect(")");
+				if (match(")"))
+					break;
+				expect_new_line_or(",");
+			}
 			return r;
 		}
 		if (match_ns("$\""))
@@ -1142,7 +1171,7 @@ struct Parser {
 		return r;
 	}
 
-	optional<string> match_id() {
+	optional<string> match_id_ns() {
 		if (!is_id_head(*cur))
 			return nullopt;
 		set_maybe_match_pos();
@@ -1151,15 +1180,20 @@ struct Parser {
 			result += *cur++;
 			++pos;
 		} while (is_id_body(*cur));
-		match_ws();
 		return result;
 	}
 
-	string expect_id(const char* message) {
+	string expect_id_ns(const char* message) {
 		set_maybe_match_pos();
-		if (auto r = match_id())
+		if (auto r = match_id_ns())
 			return *r;
 		error("expected ", message);
+	}
+
+	string expect_id(const char* message) {
+		auto r = expect_id_ns(message);
+		match_ws();
+		return r;
 	}
 
 	int match_length(const char* str) { // returns 0 if not matched, length to skip if matched
@@ -1197,10 +1231,33 @@ struct Parser {
 		}
 		return false;
 	}
-
+	bool match_prefix_op(const char* str) {
+		int i = match_length(str);
+		if (i == 0 || cur[i] == ' ')
+			return false;
+		set_maybe_match_pos();
+		cur += i;
+		pos += i;
+		return true;
+	}
+	bool match_same_line(const char* str) {
+		return !last_ws_had_new_line && match(str);
+	}
 	bool match_and_not(const char* str, char after) {
 		if (int i = match_length(str)) {
-			if (cur[i] != after) {
+			if (cur[i] != after && (!last_ws_had_new_line || cur[i] == ' ')) {
+				set_maybe_match_pos();
+				cur += i;
+				pos += i;
+				match_ws();
+				return true;
+			}
+		}
+		return false;
+	}
+	bool match_infix_op(const char* str) {
+		if (int i = match_length(str)) {
+			if (!last_ws_had_new_line || cur[i] == ' ') {
 				set_maybe_match_pos();
 				cur += i;
 				pos += i;
@@ -1234,6 +1291,7 @@ struct Parser {
 			return false;
 		line++;
 		pos = 1;
+		last_ws_had_new_line = true;
 		return true;
 	}
 
@@ -1248,6 +1306,7 @@ struct Parser {
 	}
 
 	bool match_ws() {
+		last_ws_had_new_line = false;
 		const char* c = cur;
 		for (;;) {
 			skip_spaces();
@@ -1255,6 +1314,7 @@ struct Parser {
 				while (*cur && *cur != '\n' && *cur != '\r') {
 					++cur;
 				}
+				last_ws_had_new_line = true;
 			}
 			if (!match_eoln() && (*cur == 0 || *cur > ' '))
 				return c != cur;
