@@ -110,6 +110,12 @@ struct Pruner : ast::ActionScanner {
 				fix(c.second->initializer);
 			}
 		}
+		for (auto& f : ast->retained_fns) {
+			if (auto as_method = dom::strict_cast<ast::Method>(f))
+				use_method(as_method);
+			else
+				use_fn(f);
+		}
 		use_fn(ast->starting_module->entry_point);
 		while (!tasks.empty()) {
 			tasks.front()();

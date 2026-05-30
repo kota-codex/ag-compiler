@@ -407,6 +407,7 @@ struct Ast: dom::DomItem {
 	unordered_map<weak<AbstractClass>, own<TpFrozenWeak>> frozen_weaks;
 	unordered_map<weak<AbstractClass>, own<TpConformRef>> conform_refs;
 	unordered_map<weak<AbstractClass>, own<TpConformWeak>> conform_weaks;
+	vector<weak<Function>> retained_fns;
 	weak<Class> object;
 	weak<Class> blob;
 	weak<Class> str_builder;

@@ -50,7 +50,7 @@ static void write_file(const string& name, const string& content) {
     }
 }
 
-// #define AK_DBG
+//#define AK_DBG
 #ifdef AK_DBG
 int ak_main(int argc, const char* argv[]);
 int main(int argc, char* argv[]) {
@@ -59,14 +59,14 @@ int main(int argc, char* argv[]) {
         "-g",
         "-src", "C:\\Users\\ak\\cpp\\ag\\out\\examples",
         "-src", "C:\\Users\\ak\\cpp\\ag\\out\\bin\\..\\lib::https://aglang.org/wp-json/repo/v1",
-        "-start", "test",
+        "-start", "sdlExample", //"retainTest", //"sdlDemo",
         "-O0",
-        "-pie",
-        //        "-emit-llvm",
-        //        "-S",
-                "-o", "test",
-                "-L", "lnk",
-                "-D", "dep"
+        //"-pie",
+        //"-emit-llvm",
+        //"-S",
+        "-o", "test",
+        "-L", "lnk",
+        "-D", "dep"
     };
     return ak_main(sizeof(params)/sizeof(params[0]), params);
 }
